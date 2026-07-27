@@ -1,5 +1,22 @@
 # JARVIS Progress
 
+## 2026-07-27 (6) — 앱 음성 입출력 연결
+
+- `expo-audio` + `expo-file-system` 추가. 16kHz 모노로 녹음 (whisper 입력 규격,
+  전송량도 44.1kHz 스테레오 대비 훨씬 작다)
+- `useVoiceCapture` 훅이 마이크를 소유하고, 전송 이후는 스토어가 맡는다 —
+  화면은 `voiceState` 하나만 본다. 오브·마이크 버튼 모두 같은 토글에 물렸다
+- **WS 프로토콜을 네이티브 의존에서 분리**: `voiceSession.ts`(프로토콜, expo 무의존) /
+  `voiceAudio.ts`(녹음 읽기·재생·권한). 덕분에 브라우저에서 실제 경로를 그대로 검증했다
+- iOS `NSMicrophoneUsageDescription` + Android `RECORD_AUDIO` 설정
+- **결함**: 서버가 `assistant.delta`를 액션 이벤트보다 먼저 보내서 오브가
+  "답변 중" → "실행 중"으로 **되돌아갔다**. 도구는 응답 생성 전에 실행되므로
+  이벤트도 그 순서로 보내도록 백엔드 수정 (docs/09 §3에 명시)
+- 실검증: 녹음본을 스토어에 주입해 전 구간 재생 —
+  `transcribing → thinking → executing → speaking → idle`,
+  대화 화면에 사용자 발화와 실제 날씨 응답이 렌더링됨
+
+
 ## 2026-07-27 (5) — LLM을 Bedrock으로, Phase 4 음성 대화 루프 완성
 
 ### LLM: openclaw Bedrock 게이트웨이

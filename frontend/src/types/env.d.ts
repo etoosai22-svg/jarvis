@@ -9,3 +9,6 @@ declare const process: {
     EXPO_PUBLIC_USE_MOCK_FALLBACK?: string;
   };
 };
+
+/** Expo/React Native가 번들 시점에 주입하는 개발 모드 플래그. */
+declare const __DEV__: boolean;

@@ -140,7 +140,8 @@ async def voice_websocket(websocket: WebSocket) -> None:
                         )
                     reply, task_status, actions = result.reply, result.task_status, result.actions
 
-                await send("assistant.delta", text=reply)
+                # 도구는 응답보다 먼저 실행됐다 — 이벤트도 그 순서로 보낸다.
+                # (반대로 보내면 앱 오브가 "답변 중" → "실행 중"으로 되돌아간다.)
                 for action in actions:
                     # action에 이미 type·status가 들어 있으므로 splat하지 않는다
                     # (send()의 인자와 충돌해 TypeError가 난다).
@@ -150,6 +151,8 @@ async def voice_websocket(websocket: WebSocket) -> None:
                     else:
                         detail.setdefault("status", "running")
                         await send("task.progress", **detail)
+
+                await send("assistant.delta", text=reply)
 
                 audio_b64, media_type = await _speak(settings, reply)
                 if audio_b64:

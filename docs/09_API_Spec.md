@@ -156,8 +156,12 @@ Client → Server:
 Server → Client: `task.started{session_id}`, `transcript.partial{text,chunk_count}`, `transcript.final{text}`, `assistant.delta{text}`, `audio.output{format,text}`, `task.progress{status}`, `task.completed{status}`, `error{message}`
 
 **`audio.end` 수신 시 서버가 도는 순서:** 누적 청크 → STT → `transcript.final` →
-`POST /chat`과 **동일한 오케스트레이터**(도구 선택·승인 정책) → `assistant.delta` →
-액션별 `task.progress` / `approval.required` → TTS → `audio.output` → `task.completed`.
+`POST /chat`과 **동일한 오케스트레이터**(도구 선택·승인 정책) →
+액션별 `task.progress` / `approval.required` → `assistant.delta` → TTS →
+`audio.output` → `task.completed`.
+
+액션 이벤트가 `assistant.delta`보다 **먼저** 나간다 — 도구는 응답 생성 전에 실행되며,
+순서를 뒤집으면 앱의 음성 상태가 "답변 중"에서 "실행 중"으로 되돌아간다.
 
 `audio.output`은 두 형태다: TTS 성공 시 `{format:"base64", media_type, audio}`,
 실패·비활성 시 `{format:"text", text}`. 오디오는 프레임 한도(1MB)를 넘지 않도록 압축해서 보낸다.

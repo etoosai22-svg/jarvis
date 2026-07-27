@@ -83,7 +83,10 @@ export type VoiceSocketEvent =
   | { type: 'transcript.partial'; text: string; chunk_count: number }
   | { type: 'transcript.final'; text: string }
   | { type: 'assistant.delta'; text: string }
-  | { type: 'audio.output'; format: string; text: string }
-  | { type: 'task.progress'; status: string }
+  /** TTS 성공 시 base64, 실패·비활성 시 text (docs/09 §3) */
+  | { type: 'audio.output'; format: 'base64'; media_type?: string; audio: string }
+  | { type: 'audio.output'; format: 'text'; text: string }
+  | { type: 'task.progress'; status: string; server?: string; tool?: string; request_id?: string }
+  | { type: 'approval.required'; task_id: string; server: string; tool: string }
   | { type: 'task.completed'; status: string }
   | { type: 'error'; message: string };

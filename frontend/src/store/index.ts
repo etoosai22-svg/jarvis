@@ -4,6 +4,8 @@ import { USE_MOCK_FALLBACK } from '@/config/env';
 import { memoryItems as mockMemoryItems, messages as mockMessages, tasks as mockTasks } from '@/data/mockData';
 import { jarvisApi } from '@/services/api';
 import { toJarvisTask, toMemoryItem, toTaskStatusDto } from '@/services/mappers';
+import { playBase64Audio } from '@/services/voiceAudio';
+import { runVoiceTurn } from '@/services/voiceSession';
 import type { JarvisTask, MemoryItem, Message, TaskState, VoiceState } from '@/types/models';
 
 /** 목업으로 화면을 채운 상태인지 구분해 배너로 알린다. */
@@ -36,6 +38,8 @@ type AppState = {
   setVoiceState: (state: VoiceState) => void;
   appendMessage: (message: Message) => void;
   sendMessage: (text: string) => Promise<void>;
+  /** 녹음본을 WS로 보내고 한 턴(STT→도구→TTS)을 끝까지 처리한다. */
+  submitVoiceRecording: (audioBase64: string) => Promise<void>;
   loadTasks: () => Promise<void>;
   setTaskState: (taskId: string, state: TaskState) => Promise<void>;
   loadMemories: (category?: string) => Promise<void>;
@@ -94,6 +98,46 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  submitVoiceRecording: async (audioBase64) => {
+    set({ voiceState: 'transcribing', chat: { loading: true, error: null, source: 'live' } });
+
+    let userMessageId: string | null = null;
+    try {
+      const turn = await runVoiceTurn(get().sessionId, audioBase64, {
+        onTranscript: (text, final) => {
+          if (!final) return;
+          // 인식된 발화를 사용자 말풍선으로 먼저 띄운다.
+          userMessageId = nextId('msg');
+          set((state) => ({
+            messages: [...state.messages, { id: userMessageId!, role: 'user', content: text }],
+            voiceState: 'thinking',
+          }));
+        },
+        onAction: () => set({ voiceState: 'executing' }),
+        onAudio: (audio, mediaType) => {
+          void playBase64Audio(audio, mediaType).catch(() => {
+            // 재생 실패가 턴 전체를 실패시키면 안 된다 — 텍스트는 이미 화면에 있다.
+          });
+        },
+        onReply: (text) =>
+          set((state) => ({
+            messages: [...state.messages, { id: nextId('msg'), role: 'assistant', content: text }],
+            voiceState: 'speaking',
+          })),
+      });
+
+      set({ voiceState: 'idle', chat: idleLoad });
+      if (turn.sawAction || turn.taskStatus === 'waiting_for_approval') {
+        void get().loadTasks();
+      }
+    } catch (error) {
+      set({
+        voiceState: 'error',
+        chat: { loading: false, error: describeError(error), source: 'live' },
+      });
+    }
+  },
+
   loadTasks: async () => {
     set((state) => ({ tasksLoad: { ...state.tasksLoad, loading: true, error: null } }));
     try {
@@ -143,3 +187,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 }));
+
+// 개발 편의: 브라우저/디버거에서 스토어를 직접 두드려 볼 수 있게 노출한다.
+// (마이크 없이 음성 턴을 재현할 때 유용하다. 프로덕션 번들에서는 제거된다.)
+if (__DEV__ && typeof globalThis !== 'undefined') {
+  (globalThis as Record<string, unknown>).__jarvisStore = useAppStore;
+}

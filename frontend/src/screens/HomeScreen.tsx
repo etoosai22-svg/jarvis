@@ -3,10 +3,17 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppShell, Card, Header, IconButton, Row, SectionTitle, StatusPill } from '@/components/common';
 import { VoiceOrb } from '@/components/voice/VoiceOrb';
 import { VoiceStateBanner } from '@/components/voice/VoiceStateBanner';
+import { ConnectionNotice } from '@/components/ConnectionNotice';
 import { recentConversations, todaySchedules } from '@/data/mockData';
+import { useVoiceCapture } from '@/hooks/useVoiceCapture';
+import { useAppStore } from '@/store';
 import { colors, typography } from '@/theme/tokens';
 
 export function HomeScreen() {
+  const voiceState = useAppStore((state) => state.voiceState);
+  const chatError = useAppStore((state) => state.chat.error);
+  const { toggle, permissionDenied } = useVoiceCapture();
+
   return (
     <AppShell>
       <Header title="JARVIS" right={<IconButton label="설정 열기"><Settings color={colors.text.secondary} size={21} /></IconButton>} />
@@ -14,8 +21,13 @@ export function HomeScreen() {
         <Text style={styles.hero}>안녕하세요,{`\n`}실장님.</Text>
         <Text style={styles.subtitle}>무엇을 도와드릴까요?</Text>
       </View>
-      <VoiceOrb state="idle" />
-      <VoiceStateBanner state="idle" />
+      <VoiceOrb state={voiceState} onPress={() => void toggle()} />
+      <VoiceStateBanner state={voiceState} />
+      {permissionDenied ? (
+        <ConnectionNotice message="마이크 권한이 필요합니다. 설정에서 허용한 뒤 다시 시도해 주세요." />
+      ) : chatError ? (
+        <ConnectionNotice message={chatError} />
+      ) : null}
       <SectionTitle title="오늘 일정" right={<StatusPill label="3개" tone="info" />} />
       <Card>{todaySchedules.map((item) => <Row key={item.time} icon={<Text style={styles.time}>{item.time}</Text>} title={item.title} subtitle={item.meta} />)}</Card>
       <SectionTitle title="최근 대화" right={<Text style={styles.caption}>최근 3개</Text>} />

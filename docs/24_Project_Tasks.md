@@ -36,7 +36,7 @@
 - [ ] 세션 저장  - [ ] 캐시  - [ ] Rate Limit (컨테이너만 떠 있음, 코드 미사용)
 
 ## Phase 3 - Frontend
-- [◐] Home 화면 — UI 완료, 일정·최근대화가 아직 목업
+- [◐] Home 화면 — 음성 오브가 실제로 녹음·전송한다. 일정·최근대화는 아직 목업
 - [x] Conversation 화면 (실 채팅 전송, 승인/취소 동작)
 - [x] Task 화면 (실데이터, 세그먼트 필터, 새로고침)
 - [x] Memory 화면 (실데이터, 카테고리 필터)
@@ -49,7 +49,8 @@
 - [x] **음성 대화 루프** — WS가 실제 파이프라인을 돈다: STT → 오케스트레이터(도구·승인) → TTS
 - [◐] 실시간 스트리밍 — 발화 단위는 완료, 말하는 중 부분 인식은 자리표시
 - [x] 음성 상태 UI (VoiceOrb 7종 상태)
-- [ ] 앱에서 녹음·전송·재생 (프론트 미착수)
+- [x] 앱에서 녹음·전송·재생 — expo-audio 16kHz 모노 녹음 → WS 전송 → TTS 재생.
+  오브/마이크 버튼 토글, 마이크 권한 거부 시 안내 배너 (iOS·Android 권한 문구 설정 완료)
 
 ## Phase 5 - MCP
 - [◐] Search — search_web/news/open_result/extract_summary (products/tickets는 2차)

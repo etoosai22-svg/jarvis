@@ -7,6 +7,7 @@ import { TextInputBar } from '@/components/chat/TextInputBar';
 import { ConnectionNotice } from '@/components/ConnectionNotice';
 import { TaskStatusCard } from '@/components/tasks/TaskStatusCard';
 import { VoiceOrb } from '@/components/voice/VoiceOrb';
+import { useVoiceCapture } from '@/hooks/useVoiceCapture';
 import { useAppStore } from '@/store';
 import { colors, radius, typography } from '@/theme/tokens';
 import type { VoiceState } from '@/types/models';
@@ -26,7 +27,7 @@ export function ConversationScreen() {
   const voiceState = useAppStore((state) => state.voiceState);
   const chat = useAppStore((state) => state.chat);
   const sendMessage = useAppStore((state) => state.sendMessage);
-  const setVoiceState = useAppStore((state) => state.setVoiceState);
+  const { toggle: toggleVoice, permissionDenied } = useVoiceCapture();
   const tasks = useAppStore((state) => state.tasks);
   const loadTasks = useAppStore((state) => state.loadTasks);
   const setTaskState = useAppStore((state) => state.setTaskState);
@@ -43,11 +44,15 @@ export function ConversationScreen() {
     <AppShell>
       <Header title="오늘 대화" left={<IconButton label="이전 화면으로 돌아가기"><ChevronLeft color={colors.text.secondary} size={22} /></IconButton>} right={<IconButton label="대화 검색"><Search color={colors.text.secondary} size={20} /></IconButton>} />
       <GradientCard style={styles.compactPanel}>
-        <VoiceOrb state={voiceState} compact />
+        <VoiceOrb state={voiceState} compact onPress={() => void toggleVoice()} />
         <View style={styles.flex}><Text style={styles.title}>{copy.title}</Text><Text style={styles.sub}>{copy.sub}</Text></View>
         <StatusPill label={voiceState} tone={voiceState === 'error' ? 'error' : 'info'} />
       </GradientCard>
-      {chat.error ? <ConnectionNotice message={chat.error} /> : null}
+      {permissionDenied ? (
+        <ConnectionNotice message="마이크 권한이 필요합니다. 설정에서 허용한 뒤 다시 시도해 주세요." />
+      ) : chat.error ? (
+        <ConnectionNotice message={chat.error} />
+      ) : null}
       <View style={styles.messageList}>{messages.map((message) => <MessageBubble key={message.id} message={message} />)}</View>
       {runningTask ? <TaskStatusCard task={runningTask} /> : null}
       {approvalTask ? (
@@ -63,7 +68,7 @@ export function ConversationScreen() {
       ) : null}
       <TextInputBar
         onSend={(text) => void sendMessage(text)}
-        onVoicePress={() => setVoiceState(voiceState === 'listening' ? 'idle' : 'listening')}
+        onVoicePress={() => void toggleVoice()}
         sending={chat.loading}
       />
     </AppShell>
