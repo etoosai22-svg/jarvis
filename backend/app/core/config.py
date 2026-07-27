@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # app/core/config.py -> app/core -> app -> backend -> 저장소 루트
@@ -14,8 +14,27 @@ class Settings(BaseSettings):
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
 
-    openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
-    openai_chat_model: str = "gpt-4o"
+    # LLM — OpenAI 프로토콜로 말하되 상대는 교체 가능하다.
+    # openclaw의 Bedrock 브리지처럼 OpenAI 호환 게이트웨이면 LLM_BASE_URL만 지정한다.
+    # (OPENAI_API_KEY도 계속 인식 — 기존 설정 호환)
+    llm_api_key: str | None = Field(
+        default=None, validation_alias=AliasChoices("LLM_API_KEY", "OPENAI_API_KEY")
+    )
+    llm_base_url: str | None = Field(
+        default=None, validation_alias=AliasChoices("LLM_BASE_URL", "OPENAI_BASE_URL")
+    )
+    llm_chat_model: str = Field(
+        default="gpt-4o", validation_alias=AliasChoices("LLM_CHAT_MODEL", "OPENAI_CHAT_MODEL")
+    )
+    llm_max_tokens: int = 4096
+    # Claude Opus 4.7 / Sonnet 5 이후 sampling 파라미터는 API에서 제거되어 400을 낸다.
+    # 기본은 미전송. OpenAI 계열을 쓸 때만 값을 넣는다.
+    llm_temperature: float | None = None
+
+    # 음성 — 현재는 OpenAI 전용 (Bedrock 게이트웨이는 STT/TTS를 제공하지 않는다)
+    voice_api_key: str | None = Field(
+        default=None, validation_alias=AliasChoices("VOICE_API_KEY", "OPENAI_API_KEY")
+    )
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice: str = "alloy"
     openai_whisper_model: str = "whisper-1"

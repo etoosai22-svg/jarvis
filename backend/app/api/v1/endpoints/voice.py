@@ -33,9 +33,9 @@ async def create_voice(file: UploadFile = File(...)) -> VoiceResponse:
     transcript = "음성 입력을 수신했습니다."
     tts_audio_base64: str | None = None
 
-    if settings.openai_api_key:
+    if settings.voice_api_key:
         try:
-            client = AsyncOpenAI(api_key=settings.openai_api_key)
+            client = AsyncOpenAI(api_key=settings.voice_api_key)
             suffix = ".wav" if file.filename and file.filename.endswith(".wav") else ".webm"
             with NamedTemporaryFile(suffix=suffix) as temp:
                 temp.write(data)

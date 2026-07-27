@@ -29,7 +29,7 @@ def settings_with_key():
     base = get_settings()
     from app.core.config import Settings
 
-    return Settings(**{**base.model_dump(), "openai_api_key": "sk-test-not-a-real-key"})
+    return Settings(**{**base.model_dump(), "llm_api_key": "sk-test-not-a-real-key", "llm_base_url": None})
 
 
 def _assistant_tool_call(name: str, arguments: dict) -> ChatCompletionMessage:
@@ -60,6 +60,7 @@ class FakeOpenAI:
         self.completions = self
 
     async def create(self, *, model, messages, tools=None, temperature=None, **kwargs):
+        self._recorder["model"] = model
         self._recorder["messages"].append(list(messages))
         self._recorder["tools"] = tools
         for message in messages:
@@ -74,10 +75,11 @@ class FakeOpenAI:
 
 
 def _install_fake(monkeypatch, script):
+    """build_client()가 부르는 이름을 바꾼다 (llm.py가 import 시점에 바인딩하므로)."""
     recorder = {"messages": [], "tools": None}
-    import openai
+    import app.core.llm as llm_module
 
-    monkeypatch.setattr(openai, "AsyncOpenAI", lambda api_key=None, **kw: FakeOpenAI(script, recorder))
+    monkeypatch.setattr(llm_module, "AsyncOpenAI", lambda **kw: FakeOpenAI(script, recorder))
     return recorder
 
 
@@ -196,9 +198,9 @@ def test_llm_failure_falls_back_to_rule_router(client, mcp_data, settings_with_k
         async def create(self, **kwargs):
             raise RuntimeError("API 장애")
 
-    import openai
+    import app.core.llm as llm_module
 
-    monkeypatch.setattr(openai, "AsyncOpenAI", Boom)
+    monkeypatch.setattr(llm_module, "AsyncOpenAI", Boom)
 
     result = asyncio.run(_orchestrate(settings_with_key, "아이스 아메리카노 선호 메모해줘"))
 

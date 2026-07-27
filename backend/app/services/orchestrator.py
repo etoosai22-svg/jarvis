@@ -19,6 +19,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.llm import build_client
 from app.models.task import Task
 from app.services import mcp_gateway
 
@@ -195,16 +196,20 @@ async def _route_by_llm(
     session_id: str,
     llm_messages: list[dict[str, Any]],
 ) -> OrchestrationResult:
-    from openai import AsyncOpenAI
-
     out = OrchestrationResult()
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = build_client(settings)
+    assert client is not None  # orchestrate()가 키 유무를 먼저 확인한다
     tools = await _openai_tools_schema()
     messages = list(llm_messages)
+    extra = {} if settings.llm_temperature is None else {"temperature": settings.llm_temperature}
 
     for _ in range(MAX_TOOL_ROUNDS):
         completion = await client.chat.completions.create(
-            model=settings.openai_chat_model, messages=messages, tools=tools, temperature=0.4
+            model=settings.llm_chat_model,
+            messages=messages,
+            tools=tools,
+            max_tokens=settings.llm_max_tokens,
+            **extra,
         )
         choice = completion.choices[0].message
         if not choice.tool_calls:
@@ -251,7 +256,7 @@ async def orchestrate(
     llm_messages: list[dict[str, Any]],
 ) -> OrchestrationResult:
     """도구 라우팅 진입점. reply=None이면 호출자가 일반 대화 경로를 탄다."""
-    if settings.openai_api_key:
+    if settings.llm_api_key:
         try:
             return await _route_by_llm(db, settings, user_id, session_id, llm_messages)
         except Exception:

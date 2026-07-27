@@ -8,11 +8,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from openai import AsyncOpenAI
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.llm import build_client
 from app.models.conversation import Conversation
 from app.models.memory import Memory
 from app.models.message import Message
@@ -107,14 +107,16 @@ def build_llm_messages(
 
 
 async def call_llm(settings: Settings, messages: list[dict[str, str]]) -> str | None:
-    if not settings.openai_api_key:
+    client = build_client(settings)
+    if client is None:
         return None
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        extra = {} if settings.llm_temperature is None else {"temperature": settings.llm_temperature}
         completion = await client.chat.completions.create(
-            model=settings.openai_chat_model,
+            model=settings.llm_chat_model,
             messages=messages,  # type: ignore[arg-type]
-            temperature=0.4,
+            max_tokens=settings.llm_max_tokens,
+            **extra,
         )
         return completion.choices[0].message.content
     except Exception as exc:  # pragma: no cover - 외부 API/네트워크 의존
