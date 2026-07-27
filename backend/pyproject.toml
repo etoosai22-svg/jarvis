@@ -16,7 +16,12 @@ dependencies = [
   "pydantic-settings>=2.4.0",
   "alembic>=1.13.0",
   "pyjwt[crypto]>=2.9.0",
+  "mcp>=1.2.0",
+  "jarvis-mcp",
 ]
+
+[tool.uv.sources]
+jarvis-mcp = { path = "../mcp", editable = true }
 
 [project.optional-dependencies]
 test = [

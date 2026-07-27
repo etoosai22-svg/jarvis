@@ -1,0 +1,28 @@
+[project]
+name = "jarvis-mcp"
+version = "0.1.0"
+description = "JARVIS MCP servers (Part 12): search, calendar, notes, files, weather"
+requires-python = ">=3.12"
+dependencies = [
+  "mcp>=1.2.0",
+  "httpx>=0.27.0",
+  "ddgs>=9.0.0",
+  "beautifulsoup4>=4.12.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.2.0",
+  "pytest-asyncio>=0.23.0",
+]
+
+[build-system]
+requires = ["setuptools>=70.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

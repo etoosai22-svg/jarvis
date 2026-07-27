@@ -49,9 +49,15 @@
 - [ ] 실시간 스트리밍 (WS 이벤트 계약만 존재, transcript는 자리표시)
 - [x] 음성 상태 UI (VoiceOrb 7종 상태)
 
-## Phase 5 - MCP — 전체 미착수
-- [ ] Search  - [ ] Calendar  - [ ] Notes  - [ ] Files  - [ ] Weather  - [ ] Booking(2차)
-> 명세는 Part 12에 구현 가능 수준으로 존재. `mcp/` 디렉터리는 빈 스캐폴드.
+## Phase 5 - MCP
+- [◐] Search — search_web/news/open_result/extract_summary (products/tickets는 2차)
+- [◐] Calendar — 도구 5종 완료, 로컬 sqlite 스토어 (Google 연동 시 내부 교체)
+- [◐] Notes — 도구 4종 완료, 로컬 sqlite 스토어
+- [x] Files — 도구 5종 + 샌드박스 탈출 차단 (상대·절대·심링크 3경로 테스트)
+- [◐] Weather — Open-Meteo 4종 (특보는 제공자 부재로 빈 목록)
+- [ ] Booking(2차)
+- [x] MCP Gateway — 봉투·승인 정책·타임아웃·재시도·감사 로그 (Part 12 §3·4·7·8·9·11)
+> 오케스트레이터(chat → 도구 선택 → invoke) 연결이 다음 작업.
 
 ## Phase 6 - AI
 - [x] System Prompt (`prompts/system_prompt.md` — 서버가 실제 로드)

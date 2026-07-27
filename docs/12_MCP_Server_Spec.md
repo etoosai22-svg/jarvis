@@ -1,5 +1,10 @@
 # JARVIS Project — Part 12. MCP Server Specification
 
+> **구현 상태 (2026-07-27):** MVP 1차 5종(Search/Calendar/Notes/Files/Weather) 구현 완료 — `mcp/src/jarvis_mcp/<name>/server.py` (공식 MCP python-sdk FastMCP, 테스트 34개).
+> 게이트웨이는 `backend/app/services/mcp_gateway.py` — §4 봉투, §7 승인 정책, §8 타임아웃 재시도(1회), §9 타임아웃, §11 감사 로그 구현 (테스트 7개).
+> 현재 서버는 **in-process 실행**이며 stdio 분리 시에도 `invoke()` 인터페이스는 유지된다.
+> 명세 대비 축소분: Search의 search_products/search_tickets 미구현(2차), Calendar/Notes는 외부 연동 전 로컬 sqlite 스토어(도구 인터페이스는 동일), Weather 특보는 제공자 부재로 빈 목록, 오케스트레이터 연결(§2의 Orchestrator 단계)은 다음 작업.
+
 ## 1. 목적
 JARVIS가 외부 서비스와 상호작용하기 위한 MCP 서버 구조, 책임, 도구 명세, 호출 규칙, 오류 처리 및 보안 기준을 정의한다.
 

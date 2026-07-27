@@ -38,8 +38,13 @@ JARVIS/
 │       ├── store/index.ts       # zustand
 │       ├── theme/tokens.ts
 │       └── types/               # models.ts(화면), api.ts(DTO), env.d.ts
-├── mcp/                         # Phase 5 스캐폴드 (전부 비어 있음)
-│   ├── search/  calendar/  notes/  files/  weather/
+├── mcp/                         # MCP 서버 5종 (공식 python-sdk, uv 프로젝트)
+│   ├── pyproject.toml
+│   ├── src/jarvis_mcp/
+│   │   ├── __init__.py          # 서버 공통 규약 5개 (새 서버는 이걸 따른다)
+│   │   ├── common.py            # data_dir/files_root/open_db/utcnow_iso
+│   │   ├── search/  calendar/  notes/  files/  weather/   # 각 server.py
+│   └── tests/                   # 서버별 in-memory MCP 세션 테스트 34개
 ├── scripts/                     # (비어 있음)
 ├── docker/                      # (비어 있음 — compose는 backend/에 있음)
 └── .github/workflows/           # (비어 있음 — CI 추가가 다음 우선순위)

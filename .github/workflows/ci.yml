@@ -47,6 +47,30 @@ jobs:
           uv run alembic downgrade base
           rm -f ci-check.db
 
+  mcp:
+    name: MCP servers (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: mcp/uv.lock
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra test
+
+      - name: Run tests
+        run: uv run --extra test python -m pytest -q
+
   frontend:
     name: Frontend (typecheck)
     runs-on: ubuntu-latest

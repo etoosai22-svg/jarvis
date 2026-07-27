@@ -8,6 +8,8 @@ WORKDIR /srv
 
 COPY backend/ backend/
 COPY prompts/ prompts/
+# jarvis-mcp는 경로 의존성(../mcp)이므로 이미지에 함께 담는다.
+COPY mcp/ mcp/
 
 WORKDIR /srv/backend
 RUN pip install --no-cache-dir -e .
