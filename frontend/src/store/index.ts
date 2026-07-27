@@ -4,7 +4,7 @@ import { USE_MOCK_FALLBACK } from '@/config/env';
 import { memoryItems as mockMemoryItems, messages as mockMessages, tasks as mockTasks } from '@/data/mockData';
 import { jarvisApi } from '@/services/api';
 import { toJarvisTask, toMemoryItem, toTaskStatusDto } from '@/services/mappers';
-import { playBase64Audio } from '@/services/voiceAudio';
+import { enqueueBase64Audio, resetPlaybackQueue } from '@/services/voiceAudio';
 import { runVoiceTurn } from '@/services/voiceSession';
 import type { JarvisTask, MemoryItem, Message, TaskState, VoiceState } from '@/types/models';
 
@@ -99,9 +99,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   submitVoiceRecording: async (audioBase64) => {
+    resetPlaybackQueue();
     set({ voiceState: 'transcribing', chat: { loading: true, error: null, source: 'live' } });
 
     let userMessageId: string | null = null;
+    // 응답은 문장 단위로 여러 번 도착한다 — 같은 말풍선에 이어붙인다.
+    let replyMessageId: string | null = null;
     try {
       const turn = await runVoiceTurn(get().sessionId, audioBase64, {
         onTranscript: (text, final) => {
@@ -114,16 +117,26 @@ export const useAppStore = create<AppState>((set, get) => ({
           }));
         },
         onAction: () => set({ voiceState: 'executing' }),
-        onAudio: (audio, mediaType) => {
-          void playBase64Audio(audio, mediaType).catch(() => {
-            // 재생 실패가 턴 전체를 실패시키면 안 된다 — 텍스트는 이미 화면에 있다.
-          });
-        },
+        // 재생 실패가 턴 전체를 실패시키면 안 된다 — 텍스트는 이미 화면에 있다.
+        onAudio: (audio, mediaType) => enqueueBase64Audio(audio, mediaType),
         onReply: (text) =>
-          set((state) => ({
-            messages: [...state.messages, { id: nextId('msg'), role: 'assistant', content: text }],
-            voiceState: 'speaking',
-          })),
+          set((state) => {
+            if (replyMessageId === null) {
+              replyMessageId = nextId('msg');
+              return {
+                messages: [...state.messages, { id: replyMessageId, role: 'assistant', content: text }],
+                voiceState: 'speaking',
+              };
+            }
+            return {
+              messages: state.messages.map((message) =>
+                message.id === replyMessageId
+                  ? { ...message, content: `${message.content} ${text}`.trim() }
+                  : message,
+              ),
+              voiceState: 'speaking',
+            };
+          }),
       });
 
       set({ voiceState: 'idle', chat: idleLoad });

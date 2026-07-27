@@ -12,9 +12,13 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
+
+from openai.types.chat import ChatCompletionMessage
+from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,12 +31,113 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 6
 
+#: 문장이 끝났다고 볼 지점. 한국어 종결(…다. …요.)도 마침표로 잡힌다.
+_SENTENCE_END = re.compile(r"[.!?…](?=\s|$)|\n")
+#: 너무 잘게 쪼개면 TTS 호출만 늘어난다 — 이보다 짧은 조각은 다음 문장과 합친다.
+_MIN_SENTENCE_CHARS = 12
+
+#: 완성된 문장 하나를 받는 콜백. 음성 경로가 즉시 TTS로 넘긴다.
+SentenceSink = Callable[[str], Awaitable[None]]
+#: 액션(도구 실행·승인 요청)이 생긴 즉시 받는 콜백.
+#: 스트리밍에서는 반환값을 기다릴 수 없으므로 발생 시점에 알려야 한다.
+ActionSink = Callable[[dict[str, Any]], Awaitable[None]]
+
+
+def _split_ready_sentences(buffer: str) -> tuple[list[str], str]:
+    """버퍼에서 완성된 문장들을 떼어내고 남은 꼬리를 돌려준다."""
+    sentences: list[str] = []
+    while True:
+        match = _SENTENCE_END.search(buffer)
+        if match is None:
+            break
+        cut = match.end()
+        candidate = buffer[:cut].strip()
+        if len(candidate) < _MIN_SENTENCE_CHARS and len(buffer) > cut:
+            # 너무 짧다 — 다음 종결 지점까지 더 모은다.
+            nxt = _SENTENCE_END.search(buffer, cut)
+            if nxt is None:
+                break
+            cut = nxt.end()
+            candidate = buffer[:cut].strip()
+        buffer = buffer[cut:]
+        if candidate:
+            sentences.append(candidate)
+    return sentences, buffer
+
+
+async def _complete(
+    client: Any,
+    settings: Settings,
+    messages: list[Any],
+    tools: list[dict[str, Any]] | None,
+    extra: dict[str, Any],
+    on_sentence: SentenceSink | None,
+) -> ChatCompletionMessage:
+    """한 번의 LLM 호출. on_sentence가 있으면 스트리밍으로 받아 문장 단위로 흘린다.
+
+    도구 호출 라운드는 사용자에게 보이는 텍스트가 없으므로 스트리밍해도 조용하고,
+    최종 응답 라운드만 문장이 흘러나간다 — 그래서 첫 소리가 훨씬 빨라진다.
+    """
+    request: dict[str, Any] = {
+        "model": settings.llm_chat_model,
+        "messages": messages,
+        "max_tokens": settings.llm_max_tokens,
+        **extra,
+    }
+    if tools is not None:
+        request["tools"] = tools
+
+    if on_sentence is None:
+        completion = await client.chat.completions.create(**request)
+        return completion.choices[0].message
+
+    stream = await client.chat.completions.create(**request, stream=True)
+    content = ""
+    buffer = ""
+    slots: dict[int, dict[str, str]] = {}
+
+    async for chunk in stream:
+        choices = getattr(chunk, "choices", None)
+        if not choices:
+            continue
+        delta = choices[0].delta
+        if getattr(delta, "content", None):
+            content += delta.content
+            buffer += delta.content
+            ready, buffer = _split_ready_sentences(buffer)
+            for sentence in ready:
+                await on_sentence(sentence)
+        for call in getattr(delta, "tool_calls", None) or []:
+            slot = slots.setdefault(call.index, {"id": "", "name": "", "arguments": ""})
+            if call.id:
+                slot["id"] = call.id
+            function = getattr(call, "function", None)
+            if function is not None:
+                slot["name"] += function.name or ""
+                slot["arguments"] += function.arguments or ""
+
+    tail = buffer.strip()
+    if tail:
+        await on_sentence(tail)
+
+    tool_calls = [
+        ChatCompletionMessageToolCall(
+            id=slot["id"] or f"call_{index}",
+            type="function",
+            function=Function(name=slot["name"], arguments=slot["arguments"] or "{}"),
+        )
+        for index, slot in sorted(slots.items())
+    ] or None
+    return ChatCompletionMessage(role="assistant", content=content or None, tool_calls=tool_calls)
+
 
 @dataclass
 class OrchestrationResult:
     reply: str | None = None  # None이면 도구 의도 없음 — 호출자가 일반 대화로 처리
     actions: list[dict[str, Any]] = field(default_factory=list)
     task_status: str = "completed"
+    #: 응답을 on_sentence로 이미 흘려보냈는지. True면 호출자가 다시 보낼 필요 없다.
+    streamed: bool = False
 
 
 async def _run_tool(
@@ -195,25 +300,26 @@ async def _route_by_llm(
     user_id: str,
     session_id: str,
     llm_messages: list[dict[str, Any]],
+    on_sentence: SentenceSink | None = None,
+    on_action: ActionSink | None = None,
 ) -> OrchestrationResult:
     out = OrchestrationResult()
     client = build_client(settings)
+
+    async def record(action: dict[str, Any]) -> None:
+        out.actions.append(action)
+        if on_action is not None:
+            await on_action(action)
     assert client is not None  # orchestrate()가 키 유무를 먼저 확인한다
     tools = await _openai_tools_schema()
     messages = list(llm_messages)
     extra = {} if settings.llm_temperature is None else {"temperature": settings.llm_temperature}
 
     for _ in range(MAX_TOOL_ROUNDS):
-        completion = await client.chat.completions.create(
-            model=settings.llm_chat_model,
-            messages=messages,
-            tools=tools,
-            max_tokens=settings.llm_max_tokens,
-            **extra,
-        )
-        choice = completion.choices[0].message
+        choice = await _complete(client, settings, messages, tools, extra, on_sentence)
         if not choice.tool_calls:
             out.reply = choice.content
+            out.streamed = on_sentence is not None and bool(choice.content)
             return out
 
         messages.append(choice)
@@ -225,14 +331,14 @@ async def _route_by_llm(
                 task = await _pend_approval(
                     db, user_id, server, tool, arguments, f"{server}.{tool} 실행 승인 요청"
                 )
-                out.actions.append(
+                await record(
                     {"type": "approval.required", "task_id": task.id, "server": server, "tool": tool}
                 )
                 out.task_status = "waiting_for_approval"
                 tool_payload = {"status": "approval_required", "note": "사용자 승인 대기 작업으로 등록됨"}
             else:
                 result, action = await _run_tool(db, user_id, session_id, server, tool, arguments)
-                out.actions.append(action)
+                await record(action)
                 tool_payload = result.as_dict()
 
             messages.append(
@@ -250,13 +356,9 @@ async def _route_by_llm(
             "role": "user",
             "content": "지금까지 확인한 내용만으로 실장님께 결과를 간결히 보고하세요. 추가 도구는 쓰지 마세요.",
         })
-        final = await client.chat.completions.create(
-            model=settings.llm_chat_model,
-            messages=messages,
-            max_tokens=settings.llm_max_tokens,
-            **extra,
-        )
-        out.reply = final.choices[0].message.content or None
+        final = await _complete(client, settings, messages, None, extra, on_sentence)
+        out.reply = final.content or None
+        out.streamed = on_sentence is not None and bool(out.reply)
     except Exception:
         logger.exception("summarization after tool-round limit failed")
 
@@ -276,11 +378,19 @@ async def orchestrate(
     session_id: str,
     user_message: str,
     llm_messages: list[dict[str, Any]],
+    on_sentence: SentenceSink | None = None,
+    on_action: ActionSink | None = None,
 ) -> OrchestrationResult:
-    """도구 라우팅 진입점. reply=None이면 호출자가 일반 대화 경로를 탄다."""
+    """도구 라우팅 진입점. reply=None이면 호출자가 일반 대화 경로를 탄다.
+
+    on_sentence를 주면 최종 응답이 문장 단위로 흘러나오고,
+    on_action은 도구 실행·승인 요청이 생긴 즉시 호출된다 (음성 경로가 쓴다).
+    """
     if settings.llm_api_key:
         try:
-            return await _route_by_llm(db, settings, user_id, session_id, llm_messages)
+            return await _route_by_llm(
+                db, settings, user_id, session_id, llm_messages, on_sentence, on_action
+            )
         except Exception:
             logger.exception("LLM orchestration failed; falling back to rule router")
     return await _route_by_rules(db, settings, user_id, session_id, user_message)

@@ -126,9 +126,34 @@ async def voice_websocket(websocket: WebSocket) -> None:
                 transcript = await _transcribe(settings, audio, "stream.wav")
                 await send("transcript.final", text=transcript)
 
+                # 문장이 완성되는 대로 말한다 — 응답 전체를 기다리지 않는다 (docs/09 §3).
+                sent_actions: set[str] = set()
+
+                async def emit_action(action: dict[str, Any]) -> None:
+                    """액션은 발생 즉시 나간다. 스트리밍에서는 턴이 끝나야 볼 수 있는
+                    반환값에 의존할 수 없다 (그렇게 했다가 이벤트가 통째로 유실됐다)."""
+                    key = f"{action.get('type')}:{action.get('request_id') or action.get('task_id')}"
+                    if key in sent_actions:
+                        return
+                    sent_actions.add(key)
+                    # action에 이미 type·status가 있으므로 splat하지 않는다
+                    # (send()의 인자와 충돌해 TypeError가 난다).
+                    detail = {key_: value for key_, value in action.items() if key_ != "type"}
+                    if action.get("type") == "approval.required":
+                        await send("approval.required", **detail)
+                    else:
+                        detail.setdefault("status", "running")
+                        await send("task.progress", **detail)
+
+                async def speak_sentence(sentence: str) -> None:
+                    await send("assistant.delta", text=sentence)
+                    audio_b64, media_type = await _speak(settings, sentence)
+                    if audio_b64:
+                        await send("audio.output", format="base64", media_type=media_type, audio=audio_b64)
+
                 if transcript == TRANSCRIPT_UNAVAILABLE:
                     reply = "죄송합니다, 실장님. 음성을 인식하지 못했습니다."
-                    task_status, actions = "failed", []
+                    task_status, streamed, actions = "failed", False, []
                 else:
                     async with AsyncSessionLocal() as db:
                         result = await handle_chat(
@@ -137,28 +162,24 @@ async def voice_websocket(websocket: WebSocket) -> None:
                             user_id=user_id,
                             session_id=session_id,
                             user_message=transcript,
+                            for_voice=True,
+                            on_sentence=speak_sentence,
+                            on_action=emit_action,
                         )
-                    reply, task_status, actions = result.reply, result.task_status, result.actions
+                    reply = result.reply
+                    task_status, streamed, actions = result.task_status, result.streamed, result.actions
 
-                # 도구는 응답보다 먼저 실행됐다 — 이벤트도 그 순서로 보낸다.
-                # (반대로 보내면 앱 오브가 "답변 중" → "실행 중"으로 되돌아간다.)
+                # 규칙 라우터는 콜백을 쓰지 않는다 — 못 보낸 액션과 응답을 여기서 마저 낸다.
                 for action in actions:
-                    # action에 이미 type·status가 들어 있으므로 splat하지 않는다
-                    # (send()의 인자와 충돌해 TypeError가 난다).
-                    detail = {key: value for key, value in action.items() if key != "type"}
-                    if action.get("type") == "approval.required":
-                        await send("approval.required", **detail)
+                    await emit_action(action)
+
+                if not streamed:
+                    await send("assistant.delta", text=reply)
+                    audio_b64, media_type = await _speak(settings, reply)
+                    if audio_b64:
+                        await send("audio.output", format="base64", media_type=media_type, audio=audio_b64)
                     else:
-                        detail.setdefault("status", "running")
-                        await send("task.progress", **detail)
-
-                await send("assistant.delta", text=reply)
-
-                audio_b64, media_type = await _speak(settings, reply)
-                if audio_b64:
-                    await send("audio.output", format="base64", media_type=media_type, audio=audio_b64)
-                else:
-                    await send("audio.output", format="text", text=reply)
+                        await send("audio.output", format="text", text=reply)
 
                 await send("task.completed", status=task_status)
 

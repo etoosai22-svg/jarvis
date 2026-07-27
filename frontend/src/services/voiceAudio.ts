@@ -31,19 +31,47 @@ export async function playBase64Audio(audioBase64: string, mediaType?: string): 
 
   await setAudioModeAsync({ playsInSilentMode: true });
   const player = createAudioPlayer(path);
-  player.play();
 
-  const cleanup = () => {
-    try {
-      player.remove();
-    } catch {
-      /* 이미 해제됨 */
-    }
-    void FileSystem.deleteAsync(path, { idempotent: true });
-  };
-  player.addListener('playbackStatusUpdate', (status) => {
-    if (status.didJustFinish) cleanup();
+  // 재생이 끝날 때까지 기다린다 — 문장 큐가 순서를 지키려면 필요하다.
+  await new Promise<void>((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      try {
+        player.remove();
+      } catch {
+        /* 이미 해제됨 */
+      }
+      void FileSystem.deleteAsync(path, { idempotent: true });
+      resolve();
+    };
+    player.addListener('playbackStatusUpdate', (status) => {
+      if (status.didJustFinish) finish();
+    });
+    // 재생이 끝났다는 신호가 오지 않는 경우를 대비한 상한 (문장 하나에 60초면 충분).
+    setTimeout(finish, 60_000);
+    player.play();
   });
+}
+
+/**
+ * 문장 단위로 도착하는 오디오를 **순서대로** 재생한다.
+ * 그냥 재생하면 뒤 문장이 앞 문장 위에 겹쳐 나온다.
+ */
+let playbackChain: Promise<void> = Promise.resolve();
+
+export function enqueueBase64Audio(audioBase64: string, mediaType?: string): void {
+  playbackChain = playbackChain
+    .then(() => playBase64Audio(audioBase64, mediaType))
+    .catch(() => {
+      // 한 문장 재생이 실패해도 다음 문장은 나가야 한다.
+    });
+}
+
+/** 새 턴을 시작할 때 이전 큐를 비운다 (앞 대화가 뒤늦게 들리지 않도록). */
+export function resetPlaybackQueue(): void {
+  playbackChain = Promise.resolve();
 }
 
 export async function ensureMicrophonePermission(): Promise<boolean> {

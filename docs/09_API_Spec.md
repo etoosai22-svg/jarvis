@@ -156,15 +156,22 @@ Client → Server:
 Server → Client: `task.started{session_id}`, `transcript.partial{text,chunk_count}`, `transcript.final{text}`, `assistant.delta{text}`, `audio.output{format,text}`, `task.progress{status}`, `task.completed{status}`, `error{message}`
 
 **`audio.end` 수신 시 서버가 도는 순서:** 누적 청크 → STT → `transcript.final` →
-`POST /chat`과 **동일한 오케스트레이터**(도구 선택·승인 정책) →
-액션별 `task.progress` / `approval.required` → `assistant.delta` → TTS →
-`audio.output` → `task.completed`.
+`POST /chat`과 **동일한 오케스트레이터**(도구 선택·승인 정책) → **문장 단위 스트리밍**.
 
-액션 이벤트가 `assistant.delta`보다 **먼저** 나간다 — 도구는 응답 생성 전에 실행되며,
-순서를 뒤집으면 앱의 음성 상태가 "답변 중"에서 "실행 중"으로 되돌아간다.
+**`assistant.delta`와 `audio.output`은 한 턴에 여러 번 나간다.** LLM 응답을
+문장이 완성되는 대로 흘려보내므로 첫 소리까지의 시간이 응답 전체 길이와 무관해진다.
+클라이언트는 델타를 **같은 말풍선에 이어붙이고**, 오디오는 **도착 순서대로 큐에 넣어**
+재생해야 한다 (겹쳐 재생하면 문장이 뒤섞인다).
+
+`task.progress` / `approval.required`는 **도구가 실행된 즉시** 나간다 — 응답보다 먼저다.
+도구는 응답 생성 전에 실행되며, 순서를 뒤집으면 앱 음성 상태가
+"답변 중"에서 "실행 중"으로 되돌아간다.
 
 `audio.output`은 두 형태다: TTS 성공 시 `{format:"base64", media_type, audio}`,
 실패·비활성 시 `{format:"text", text}`. 오디오는 프레임 한도(1MB)를 넘지 않도록 압축해서 보낸다.
+
+**음성 응답 길이:** 음성 경로는 시스템 프롬프트에 "2~3문장, 마크다운 금지" 지침을 덧붙인다.
+출력 토큰이 지연을 지배하므로(초당 약 60토큰) 길이 제한이 곧 체감 속도다.
 
 > **현재 상태:** 발화 단위 처리는 완료(파일 업로드·WS 모두 실제 STT/LLM/TTS를 탄다).
 > 스트리밍 부분 인식(말하는 중 실시간 transcript)은 아직 자리표시이며,
