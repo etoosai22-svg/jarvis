@@ -53,6 +53,21 @@ export async function ensureMicrophonePermission(): Promise<boolean> {
   return true;
 }
 
+/** ArrayBuffer → base64. btoa는 문자열만 받으므로 청크로 나눠 넘긴다. */
+function toBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return btoa(binary);
+}
+
 export async function readRecordingAsBase64(uri: string): Promise<string> {
+  // 웹은 MediaRecorder 결과를 blob: URI로 준다 — 파일시스템으로는 읽히지 않는다.
+  if (uri.startsWith('blob:') || uri.startsWith('http')) {
+    const response = await fetch(uri);
+    return toBase64(await response.arrayBuffer());
+  }
   return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
 }
