@@ -1,5 +1,28 @@
 # JARVIS Progress
 
+## 2026-07-27 (5) — LLM을 Bedrock으로, Phase 4 음성 대화 루프 완성
+
+### LLM: openclaw Bedrock 게이트웨이
+- 게이트웨이가 OpenAI completions 규약을 말해서 **SDK 교체 없이 base_url만** 바꾸면 됐다
+- 설정을 공급자 중립으로 (`LLM_API_KEY`/`LLM_BASE_URL`/`LLM_CHAT_MODEL`), `build_client()` 팩토리로 통합
+- **결함 ①** 두 호출부가 `temperature=0.4`를 하드코딩 → Bedrock이 502로 거부
+  (`temperature`는 Claude Opus 4.7/Sonnet 5에서 API에서 제거됨). chat·오케스트레이터가
+  조용히 규칙 라우터로 폴백하고 있었다. 기본 미전송으로 변경
+- **결함 ②** `.env` 추가 후 테스트가 실제 Bedrock을 호출 (스위트 0.7초 → 133초).
+  conftest에서 LLM/음성 공급자를 명시적으로 차단
+
+### Phase 4: 음성
+- 제공자 추상화 `app/services/voice/` — local(faster-whisper + macOS `say`) / openai / none
+- Bedrock 게이트웨이는 채팅만 중계하므로 **기본은 온디바이스** (키 불필요, 오디오가 기기를 안 떠남)
+- **WS가 자리표시 문구 대신 실제 파이프라인을 돈다**: STT → 오케스트레이터(도구·승인) → TTS
+- **결함 ③** `send(..., **action)`이 `status`/`type`과 충돌해 TypeError → WS 종료
+- **결함 ④** 무압축 AIFF가 WS 1MB 프레임 한도 초과 → ffmpeg AAC 압축 (1.7MB → 39KB)
+- **결함 ⑤** 도구 라운드 한도(3)에 걸리면 "한도에 도달했습니다"를 **음성으로 읽어줬다**.
+  한도 6으로 올리고, 걸려도 도구 없이 한 번 더 불러 정리하도록 변경
+- 실검증: 음성 왕복 2회 — 날씨(즉시 실행, 14초) / 일정(승인 요청, 23초) 전 구간 통과
+- 테스트 39개
+
+
 ## 2026-07-27 (4) — 실동작 검증에서 결함 4건 발견·수정
 
 실키(OpenAI)와 Xcode가 이 머신에 없어, 가능한 최대치로 검증하고 막힌 곳은 명시:

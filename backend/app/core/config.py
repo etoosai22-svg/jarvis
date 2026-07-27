@@ -35,9 +35,15 @@ class Settings(BaseSettings):
     voice_api_key: str | None = Field(
         default=None, validation_alias=AliasChoices("VOICE_API_KEY", "OPENAI_API_KEY")
     )
+    # auto | local | openai | none  (auto = 키 있으면 openai, macOS면 local)
+    voice_provider: str = "auto"
+    voice_language: str = "ko"
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice: str = "alloy"
     openai_whisper_model: str = "whisper-1"
+    # 온디바이스 설정 (tiny/base/small/medium/large-v3 — base가 속도·정확도 균형)
+    local_whisper_model: str = "base"
+    local_tts_voice: str = "Yuna"
 
     database_url: str = "sqlite+aiosqlite:///./jarvis.db"
     redis_url: str = "redis://localhost:6379/0"

@@ -181,12 +181,34 @@ def test_round_limit_stops_endless_tool_calls(client, mcp_data, settings_with_ke
 
     monkeypatch.setattr(weather_server, "_get_json", fake_get_json)
     call = _assistant_tool_call("weather__get_current_weather", {"location": "서울"})
-    _install_fake(monkeypatch, [call, call, call, call])
+    # 라운드 수만큼 도구 호출 + 마지막 정리용 호출 1회
+    script = [call] * orchestrator.MAX_TOOL_ROUNDS + [_assistant_text("지금까지 확인한 결과입니다.")]
+    _install_fake(monkeypatch, script)
 
     result = asyncio.run(_orchestrate(settings_with_key, "날씨"))
 
     assert len([a for a in result.actions if a["type"] == "tool.executed"]) == orchestrator.MAX_TOOL_ROUNDS
-    assert "한도" in result.reply
+    # 사용자에게 "한도 도달"이라고 말하지 않고, 정리된 문장을 낸다
+    assert result.reply == "지금까지 확인한 결과입니다."
+    assert "한도" not in result.reply
+
+
+def test_round_limit_falls_back_to_a_usable_sentence(client, mcp_data, settings_with_key, monkeypatch):
+    """정리 호출까지 실패해도 쓸 수 있는 문장이 나가야 한다 (음성으로 읽히므로)."""
+    async def fake_get_json(url, params):
+        if "geocoding" in url:
+            return {"results": [{"name": "서울", "latitude": 37.5, "longitude": 127.0, "timezone": "Asia/Seoul"}]}
+        return {"current": {"temperature_2m": 28.0}, "current_units": {}}
+
+    monkeypatch.setattr(weather_server, "_get_json", fake_get_json)
+    call = _assistant_tool_call("weather__get_current_weather", {"location": "서울"})
+    script = [call] * orchestrator.MAX_TOOL_ROUNDS + [_assistant_text("")]
+    _install_fake(monkeypatch, script)
+
+    result = asyncio.run(_orchestrate(settings_with_key, "날씨"))
+
+    assert "실장님" in result.reply
+    assert "한도" not in result.reply
 
 
 def test_llm_failure_falls_back_to_rule_router(client, mcp_data, settings_with_key, monkeypatch):

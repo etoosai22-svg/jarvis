@@ -24,6 +24,10 @@ dependencies = [
 jarvis-mcp = { path = "../mcp", editable = true }
 
 [project.optional-dependencies]
+# 로컬 STT. Bedrock 게이트웨이는 음성을 제공하지 않으므로 온디바이스로 처리한다.
+voice = [
+  "faster-whisper>=1.1.0",
+]
 test = [
   "pytest>=8.2.0",
   "pytest-asyncio>=0.23.0",

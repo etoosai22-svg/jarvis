@@ -25,7 +25,7 @@ from app.services import mcp_gateway
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_ROUNDS = 3
+MAX_TOOL_ROUNDS = 6
 
 
 @dataclass
@@ -243,7 +243,29 @@ async def _route_by_llm(
                 }
             )
 
-    out.reply = "도구 호출 한도에 도달했습니다. 지금까지의 결과를 정리해 다시 말씀드리겠습니다."
+    # 한도에 걸렸다면 도구 없이 한 번 더 불러 지금까지의 결과를 말이 되는 문장으로 정리한다.
+    # (사용자에게 "한도 도달"이라고 말하는 건 답이 아니다 — 특히 음성에서는.)
+    try:
+        messages.append({
+            "role": "user",
+            "content": "지금까지 확인한 내용만으로 실장님께 결과를 간결히 보고하세요. 추가 도구는 쓰지 마세요.",
+        })
+        final = await client.chat.completions.create(
+            model=settings.llm_chat_model,
+            messages=messages,
+            max_tokens=settings.llm_max_tokens,
+            **extra,
+        )
+        out.reply = final.choices[0].message.content or None
+    except Exception:
+        logger.exception("summarization after tool-round limit failed")
+
+    if not out.reply:
+        out.reply = (
+            "네, 실장님. 요청하신 내용을 처리했습니다. 자세한 결과는 작업 목록에서 확인해 주세요."
+            if out.actions
+            else "죄송합니다, 실장님. 요청을 완료하지 못했습니다. 다시 말씀해 주시겠습니까?"
+        )
     return out
 
 

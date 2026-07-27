@@ -44,10 +44,12 @@
 - 공통: 백엔드 미가동 시 목업 폴백 + 경고 배너, `tsc --noEmit` 무오류
 
 ## Phase 4 - Voice
-- [◐] STT 연동 — 업로드형(POST /voice)만, 앱에서 녹음·전송 미구현
-- [◐] TTS 연동 — 서버 합성만, 앱 재생 미구현
-- [ ] 실시간 스트리밍 (WS 이벤트 계약만 존재, transcript는 자리표시)
+- [x] STT 연동 — 제공자 추상화(local/openai). 기본은 온디바이스 faster-whisper
+- [x] TTS 연동 — macOS `say`(한국어) + ffmpeg AAC 압축, OpenAI TTS도 지원
+- [x] **음성 대화 루프** — WS가 실제 파이프라인을 돈다: STT → 오케스트레이터(도구·승인) → TTS
+- [◐] 실시간 스트리밍 — 발화 단위는 완료, 말하는 중 부분 인식은 자리표시
 - [x] 음성 상태 UI (VoiceOrb 7종 상태)
+- [ ] 앱에서 녹음·전송·재생 (프론트 미착수)
 
 ## Phase 5 - MCP
 - [◐] Search — search_web/news/open_result/extract_summary (products/tickets는 2차)
@@ -63,9 +65,10 @@
 ## Phase 6 - AI
 - [x] System Prompt (`prompts/system_prompt.md` — 서버가 실제 로드)
 - [◐] Memory Retrieval — 키워드 ILIKE. 벡터 검색으로 교체 예정
-- [◐] Planner/Tool Selection — 오케스트레이터 구현 (LLM function-calling 최대 3라운드
-  + 키 없을 때 규칙 라우터: 날씨/검색/메모/일정). LLM 경로는 실키 검증 미실시
-- [◐] Response Generator — 도구 결과 기반 응답 합성 (규칙 경로), LLM 합성은 키 필요
+- [x] Planner/Tool Selection — 오케스트레이터 (LLM function-calling 최대 6라운드,
+  Bedrock Claude Sonnet 5로 실검증 / 키 없을 때 규칙 라우터 폴백)
+- [x] Response Generator — LLM이 도구 결과를 문장으로 합성. 라운드 한도 시에도
+  도구 없이 한 번 더 불러 정리한다 (음성으로 읽히므로 "한도 도달" 같은 문구 금지)
 
 ## Phase 7 - Security
 - [◐] OAuth — 서버측 검증 완료(S1~S4), IdP·로그인 플로우 미착수

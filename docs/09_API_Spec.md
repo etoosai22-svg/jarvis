@@ -56,7 +56,7 @@ Request:
 1. `(user, session_id)`의 열린 conversation을 찾거나 생성
 2. 직전 대화 `CHAT_HISTORY_LIMIT`(기본 12)턴 + 관련 memory `CHAT_MEMORY_LIMIT`(기본 5)건 회수
 3. **오케스트레이터**가 MCP 도구 필요 여부를 판단해 게이트웨이로 호출 (Part 12 규칙 적용)
-   - LLM 사용 가능 시: function-calling으로 도구 선택 (최대 3라운드)
+   - LLM 사용 가능 시: function-calling으로 도구 선택 (최대 6라운드; 한도 도달 시 도구 없이 한 번 더 불러 정리)
    - LLM 없을 때: 규칙 기반 라우터 (날씨/검색/메모/일정 등록)
    - 승인 필수 도구(Part 12 §7)에 걸리면 실행하지 않고 `waiting_for_approval` 작업을 생성
 4. user/assistant 메시지 2행을 `messages`에 저장
@@ -76,11 +76,17 @@ actions 항목 타입:
 | `tool.executed` | `server, tool, status, request_id` | MCP 도구가 실행됨 (status는 Part 12 §5) |
 | `approval.required` | `task_id, server, tool` | 승인 대기 작업 생성 — 앱은 승인 카드를 띄우고 아래 PATCH로 응답 |
 
-### POST /api/v1/voice
-`multipart/form-data`, 필드명 `file` (필수, 빈 파일이면 400).
-OpenAI 키가 있으면 Whisper STT + TTS 수행, 없으면 고정 문구 fallback.
+### GET /api/v1/voice/health — 무인증
+활성 음성 제공자 확인: `{"provider": "local"|"openai"|"none", "stt": string|null, "tts": string|null}`
 
-Response: `{"transcript": string, "intent": "task" | "chat", "tts_audio_base64": string | null}`
+### POST /api/v1/voice
+`multipart/form-data`, 필드명 `file` (필수, 빈 파일이면 400, 25MB 초과 413).
+
+**제공자는 `VOICE_PROVIDER`로 고른다** (기본 `auto`). Bedrock 게이트웨이는 음성을 중계하지
+않으므로, 키가 없으면 온디바이스(faster-whisper + macOS `say`)로 처리한다.
+STT 실패는 예외가 아니라 자리표시 transcript로 떨어진다 — 음성이 안 돼도 대화는 이어져야 한다.
+
+Response: `{"transcript": string, "intent": "task"|"chat", "tts_audio_base64": string|null, "tts_media_type": string|null}`
 
 ### GET /api/v1/tasks — 요청자 소유만
 Query: `limit`, `offset`. 정렬: `created_at` 내림차순.
@@ -149,8 +155,16 @@ Client → Server:
 
 Server → Client: `task.started{session_id}`, `transcript.partial{text,chunk_count}`, `transcript.final{text}`, `assistant.delta{text}`, `audio.output{format,text}`, `task.progress{status}`, `task.completed{status}`, `error{message}`
 
-> **현재 상태:** 이벤트 시퀀스는 위 계약대로 동작하나 transcript 내용은 자리표시 문구다
-> (실시간 STT 미구현, Phase 4). 클라이언트는 이벤트 타입만 신뢰하고 문구에 의존하지 말 것.
+**`audio.end` 수신 시 서버가 도는 순서:** 누적 청크 → STT → `transcript.final` →
+`POST /chat`과 **동일한 오케스트레이터**(도구 선택·승인 정책) → `assistant.delta` →
+액션별 `task.progress` / `approval.required` → TTS → `audio.output` → `task.completed`.
+
+`audio.output`은 두 형태다: TTS 성공 시 `{format:"base64", media_type, audio}`,
+실패·비활성 시 `{format:"text", text}`. 오디오는 프레임 한도(1MB)를 넘지 않도록 압축해서 보낸다.
+
+> **현재 상태:** 발화 단위 처리는 완료(파일 업로드·WS 모두 실제 STT/LLM/TTS를 탄다).
+> 스트리밍 부분 인식(말하는 중 실시간 transcript)은 아직 자리표시이며,
+> WS 인증은 Phase 7 대상이다.
 
 ## 4. 명시적으로 없는 것 (향후 계약 추가 대상)
 - DELETE (tasks/memory), memory 수정(PUT/PATCH)
