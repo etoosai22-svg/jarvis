@@ -4,6 +4,7 @@
 
 음성 기반 개인 AI 비서실장. FastAPI 백엔드 + React Native(Expo) 앱.
 
+- **다음 세션 인수인계**: [HANDOFF.md](HANDOFF.md) ← 이어서 작업한다면 여기부터
 - **설계 문서**: [docs/](docs/README.md) — 계약/방향/현황 3층 구조, 정본 규칙 포함
 - **진행 로그**: [PROGRESS.md](PROGRESS.md)
 - **진행 현황**: [docs/24_Project_Tasks.md](docs/24_Project_Tasks.md)
