@@ -145,3 +145,94 @@ def test_without_callback_the_path_stays_non_streaming(client, mcp_data, setting
     result = asyncio.run(run())
     assert result.streamed is False
     assert result.reply == "한 번에 받은 응답입니다."
+
+
+# ---------------------------------------------------------------- 모델 라우팅
+
+def test_voice_path_uses_the_voice_model(client, mcp_data, monkeypatch):
+    """음성은 지연이 곧 체감 품질이라 더 빠른 모델로 돌린다."""
+    import app.core.llm as llm_module
+    from openai.types.chat import ChatCompletionMessage
+
+    base = get_settings()
+    settings = Settings(**{
+        **base.model_dump(),
+        "llm_api_key": "sk-test", "llm_base_url": None,
+        "llm_chat_model": "big-model", "llm_voice_model": "fast-model",
+    })
+    used: list[str] = []
+
+    class Recorder:
+        def __init__(self):
+            self.chat = self
+            self.completions = self
+
+        async def create(self, *, model, **kwargs):
+            used.append(model)
+            message = ChatCompletionMessage(role="assistant", content="응답")
+            return type("Completion", (), {"choices": [type("C", (), {"message": message})()]})()
+
+    monkeypatch.setattr(llm_module, "AsyncOpenAI", lambda **kw: Recorder())
+
+    async def run(for_voice):
+        async with AsyncSessionLocal() as db:
+            return await orchestrator.orchestrate(
+                db=db, settings=settings, user_id="local-user", session_id="s-model",
+                user_message="안녕", llm_messages=[{"role": "user", "content": "안녕"}],
+                for_voice=for_voice,
+            )
+
+    asyncio.run(run(True))
+    asyncio.run(run(False))
+    assert used == ["fast-model", "big-model"]
+
+
+def test_voice_model_falls_back_to_chat_model_when_unset(monkeypatch):
+    from app.core.llm import pick_model
+
+    base = get_settings()
+    settings = Settings(**{**base.model_dump(), "llm_chat_model": "only-model", "llm_voice_model": None})
+    assert pick_model(settings, for_voice=True) == "only-model"
+
+
+def test_round_limit_summary_keeps_tools_in_the_request(client, mcp_data, settings_with_key, monkeypatch):
+    """히스토리에 tool_calls가 남아 있는데 tools를 빼면 Bedrock이 502를 낸다."""
+    import app.core.llm as llm_module
+    from openai.types.chat import ChatCompletionMessage
+    from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
+
+    tool_call = ChatCompletionMessage(
+        role="assistant", content=None,
+        tool_calls=[ChatCompletionMessageToolCall(
+            id="c1", type="function",
+            function=Function(name="notes__search_notes", arguments="{}"))],
+    )
+    seen_tools: list[bool] = []
+
+    class Recorder:
+        def __init__(self):
+            self.chat = self
+            self.completions = self
+            self.calls = 0
+
+        async def create(self, *, tools=None, **kwargs):
+            seen_tools.append(tools is not None)
+            self.calls += 1
+            if self.calls <= orchestrator.MAX_TOOL_ROUNDS:
+                message = tool_call
+            else:
+                message = ChatCompletionMessage(role="assistant", content="정리했습니다.")
+            return type("Completion", (), {"choices": [type("C", (), {"message": message})()]})()
+
+    monkeypatch.setattr(llm_module, "AsyncOpenAI", lambda **kw: Recorder())
+
+    async def run():
+        async with AsyncSessionLocal() as db:
+            return await orchestrator.orchestrate(
+                db=db, settings=settings_with_key, user_id="local-user", session_id="s-limit",
+                user_message="메모 정리", llm_messages=[{"role": "user", "content": "메모 정리"}],
+            )
+
+    result = asyncio.run(run())
+    assert all(seen_tools), "정리용 마지막 호출에서도 tools를 유지해야 한다"
+    assert result.reply == "정리했습니다."

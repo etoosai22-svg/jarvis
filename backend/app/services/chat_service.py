@@ -163,7 +163,7 @@ async def handle_chat(
 
     # 1) 오케스트레이터 — 도구 의도가 있으면 게이트웨이 호출까지 끝내고 응답을 만든다.
     orchestration = await orchestrate(
-        db, settings, user_id, session_id, user_message, llm_messages, on_sentence, on_action
+        db, settings, user_id, session_id, user_message, llm_messages, on_sentence, on_action, for_voice
     )
     if orchestration.reply is not None:
         db.add(Message(conversation_id=conversation.id, role="assistant", content=orchestration.reply))

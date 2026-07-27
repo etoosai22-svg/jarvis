@@ -27,6 +27,10 @@ class Settings(BaseSettings):
         default="gpt-4o", validation_alias=AliasChoices("LLM_CHAT_MODEL", "OPENAI_CHAT_MODEL")
     )
     llm_max_tokens: int = 4096
+    # 음성 전용 모델. 음성 응답은 2~3문장이고 지연이 곧 체감 품질이라,
+    # 더 빠른 모델이 유리하다 (실측: 도구 선택 1.5초 vs 3.6초, 정확도는 오히려 더 높음).
+    # 비워 두면 llm_chat_model을 그대로 쓴다.
+    llm_voice_model: str | None = None
     # Claude Opus 4.7 / Sonnet 5 이후 sampling 파라미터는 API에서 제거되어 400을 낸다.
     # 기본은 미전송. OpenAI 계열을 쓸 때만 값을 넣는다.
     llm_temperature: float | None = None

@@ -23,6 +23,13 @@ def build_client(settings: Settings) -> AsyncOpenAI | None:
     return AsyncOpenAI(**kwargs)  # type: ignore[arg-type]
 
 
+def pick_model(settings: Settings, for_voice: bool = False) -> str:
+    """음성 경로는 llm_voice_model(설정 시)을, 그 외에는 llm_chat_model을 쓴다."""
+    if for_voice and settings.llm_voice_model:
+        return settings.llm_voice_model
+    return settings.llm_chat_model
+
+
 def describe_provider(settings: Settings) -> str:
     """로그·헬스체크용 표기 (키는 절대 포함하지 않는다)."""
     if not settings.llm_api_key:

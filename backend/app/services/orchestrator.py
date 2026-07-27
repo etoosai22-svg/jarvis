@@ -23,7 +23,7 @@ from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMe
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.llm import build_client
+from app.core.llm import build_client, pick_model
 from app.models.task import Task
 from app.services import mcp_gateway
 
@@ -72,6 +72,7 @@ async def _complete(
     tools: list[dict[str, Any]] | None,
     extra: dict[str, Any],
     on_sentence: SentenceSink | None,
+    model: str | None = None,
 ) -> ChatCompletionMessage:
     """한 번의 LLM 호출. on_sentence가 있으면 스트리밍으로 받아 문장 단위로 흘린다.
 
@@ -79,7 +80,7 @@ async def _complete(
     최종 응답 라운드만 문장이 흘러나간다 — 그래서 첫 소리가 훨씬 빨라진다.
     """
     request: dict[str, Any] = {
-        "model": settings.llm_chat_model,
+        "model": model or settings.llm_chat_model,
         "messages": messages,
         "max_tokens": settings.llm_max_tokens,
         **extra,
@@ -302,6 +303,7 @@ async def _route_by_llm(
     llm_messages: list[dict[str, Any]],
     on_sentence: SentenceSink | None = None,
     on_action: ActionSink | None = None,
+    for_voice: bool = False,
 ) -> OrchestrationResult:
     out = OrchestrationResult()
     client = build_client(settings)
@@ -314,9 +316,10 @@ async def _route_by_llm(
     tools = await _openai_tools_schema()
     messages = list(llm_messages)
     extra = {} if settings.llm_temperature is None else {"temperature": settings.llm_temperature}
+    model = pick_model(settings, for_voice)
 
     for _ in range(MAX_TOOL_ROUNDS):
-        choice = await _complete(client, settings, messages, tools, extra, on_sentence)
+        choice = await _complete(client, settings, messages, tools, extra, on_sentence, model)
         if not choice.tool_calls:
             out.reply = choice.content
             out.streamed = on_sentence is not None and bool(choice.content)
@@ -356,7 +359,9 @@ async def _route_by_llm(
             "role": "user",
             "content": "지금까지 확인한 내용만으로 실장님께 결과를 간결히 보고하세요. 추가 도구는 쓰지 마세요.",
         })
-        final = await _complete(client, settings, messages, None, extra, on_sentence)
+        # tools를 빼면 Bedrock이 502를 낸다 — 히스토리에 tool_calls가 남아 있기 때문이다.
+        # 대신 "도구를 더 쓰지 말라"고 말로 지시한다 (위 user 메시지).
+        final = await _complete(client, settings, messages, tools, extra, on_sentence, model)
         out.reply = final.content or None
         out.streamed = on_sentence is not None and bool(out.reply)
     except Exception:
@@ -380,6 +385,7 @@ async def orchestrate(
     llm_messages: list[dict[str, Any]],
     on_sentence: SentenceSink | None = None,
     on_action: ActionSink | None = None,
+    for_voice: bool = False,
 ) -> OrchestrationResult:
     """도구 라우팅 진입점. reply=None이면 호출자가 일반 대화 경로를 탄다.
 
@@ -389,7 +395,7 @@ async def orchestrate(
     if settings.llm_api_key:
         try:
             return await _route_by_llm(
-                db, settings, user_id, session_id, llm_messages, on_sentence, on_action
+                db, settings, user_id, session_id, llm_messages, on_sentence, on_action, for_voice
             )
         except Exception:
             logger.exception("LLM orchestration failed; falling back to rule router")
