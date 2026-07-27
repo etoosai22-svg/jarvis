@@ -157,3 +157,43 @@ def test_plain_task_keyword_still_creates_queued_task(client, mcp_data):
     payload = response.json()
     assert payload["task_status"] == "queued"
     assert payload["actions"][0]["type"] == "task.created"
+
+
+def test_approval_request_and_cancellation_are_audited(client, mcp_data):
+    """실행되지 않은 결정도 감사 대상이다 (docs/19 S9)."""
+    import asyncio
+
+    from sqlalchemy import select
+
+    from app.core.database import AsyncSessionLocal
+    from app.models.audit_log import AuditLog
+
+    async def audit_statuses(title_marker: str) -> list[str]:
+        """테스트 DB는 세션 공유이므로 이 테스트가 만든 행만 제목으로 골라낸다."""
+        async with AsyncSessionLocal() as db:
+            rows = (
+                await db.execute(
+                    select(AuditLog).where(
+                        AuditLog.action == "mcp.calendar.create_event",
+                        AuditLog.target.contains(title_marker),
+                    )
+                )
+            ).scalars().all()
+        return [json.loads(row.result)["status"] for row in rows]
+
+    approve_id = client.post(
+        "/api/v1/chat", json={"session_id": "s-audit-1", "message": "내일 11시 감사대상회의 일정 잡아줘"}
+    ).json()["actions"][0]["task_id"]
+    cancel_id = client.post(
+        "/api/v1/chat", json={"session_id": "s-audit-2", "message": "모레 15시 거절될미팅 일정 잡아줘"}
+    ).json()["actions"][0]["task_id"]
+
+    # 실행 전, 승인을 요청했다는 사실만으로 기록이 남아야 한다
+    assert asyncio.run(audit_statuses("감사대상회의")) == ["approval_required"]
+    assert asyncio.run(audit_statuses("거절될미팅")) == ["approval_required"]
+
+    client.patch(f"/api/v1/tasks/{approve_id}", params={"status_value": "running"})
+    client.patch(f"/api/v1/tasks/{cancel_id}", params={"status_value": "cancelled"})
+
+    assert asyncio.run(audit_statuses("감사대상회의")) == ["approval_required", "success"]
+    assert asyncio.run(audit_statuses("거절될미팅")) == ["approval_required", "cancelled"]

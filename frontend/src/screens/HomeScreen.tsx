@@ -10,7 +10,7 @@ export function HomeScreen() {
   return (
     <AppShell>
       <Header title="JARVIS" right={<IconButton label="설정 열기"><Settings color={colors.text.secondary} size={21} /></IconButton>} />
-      <View className="mb-5">
+      <View style={styles.heroBlock}>
         <Text style={styles.hero}>안녕하세요,{`\n`}실장님.</Text>
         <Text style={styles.subtitle}>무엇을 도와드릴까요?</Text>
       </View>
@@ -24,6 +24,7 @@ export function HomeScreen() {
   );
 }
 const styles = StyleSheet.create({
+  heroBlock: { marginBottom: 20 },
   hero: { ...typography.hero, color: colors.text.primary },
   subtitle: { ...typography.bodyLg, color: colors.text.secondary, marginTop: 6 },
   time: { ...typography.caption, color: '#BAE6FD', fontWeight: '800' },

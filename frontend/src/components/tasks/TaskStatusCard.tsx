@@ -7,7 +7,14 @@ const statusMap: Record<TaskState, { label: string; tone: 'info' | 'success' | '
   queued: { label: '대기 중', tone: 'muted' }, running: { label: '검색 중', tone: 'info' }, approval_required: { label: '승인 필요', tone: 'warning' }, completed: { label: '완료', tone: 'success' }, failed: { label: '오류', tone: 'error' }, cancelled: { label: '취소됨', tone: 'muted' },
 };
 
-export function TaskStatusCard({ task }: { task: JarvisTask }) {
+type TaskStatusCardProps = {
+  task: JarvisTask;
+  /** 승인 시 보류된 MCP 호출이 실행된다 (docs/09 승인 실행 규칙). */
+  onApprove?: () => void;
+  onCancel?: () => void;
+};
+
+export function TaskStatusCard({ task, onApprove, onCancel }: TaskStatusCardProps) {
   const meta = statusMap[task.status];
   return (
     <View style={styles.card} accessibilityLabel={`${task.title}, ${meta.label}`}>
@@ -16,7 +23,7 @@ export function TaskStatusCard({ task }: { task: JarvisTask }) {
         <StatusPill label={meta.label} tone={meta.tone} />
       </View>
       {typeof task.progress === 'number' ? <View style={styles.progress}><View style={[styles.fill, { width: `${task.progress}%` }, task.status === 'approval_required' && styles.warning, task.status === 'completed' && styles.success]} /></View> : null}
-      {task.status === 'approval_required' ? <View style={styles.actions}><PrimaryButton label="승인" /><SecondaryButton label="취소" /></View> : null}
+      {task.status === 'approval_required' ? <View style={styles.actions}><PrimaryButton label="승인" onPress={onApprove} /><SecondaryButton label="취소" onPress={onCancel} /></View> : null}
     </View>
   );
 }

@@ -1,5 +1,21 @@
 # JARVIS Progress
 
+## 2026-07-27 (4) — 실동작 검증에서 결함 4건 발견·수정
+
+실키(OpenAI)와 Xcode가 이 머신에 없어, 가능한 최대치로 검증하고 막힌 곳은 명시:
+
+- **LLM 경로**: OpenAI SDK 타입 그대로 쓰는 모킹 테스트 5개 추가 (도구 22개 스키마 유효성,
+  tool_call → 게이트웨이 → tool 메시지 회신, 승인 분기, 라운드 한도, 장애 시 규칙 라우터 폴백)
+  → **결함 ①** `Settings(openai_api_key=...)`가 조용히 무시됨 (validation_alias + populate_by_name 부재)
+- **승인 루프 라이브 HTTP**: 실서버로 chat → 승인 → 취소 왕복
+  → **결함 ②** 승인 *요청*과 *거절*이 감사 로그에 안 남음 (실행된 것만 기록) → `record_decision` 추가
+- **앱 UI**: Xcode 미설치로 시뮬레이터 불가 → Expo 웹으로 검증
+  → **결함 ③** nativewind가 `react-native-worklets` 부재로 번들 자체를 깨뜨림 (웹·네이티브 공통).
+    실사용은 className 1곳뿐이라 제거 → 번들 성공
+  → **결함 ④** Tasks 화면 승인/취소 버튼에 onPress 미연결 (죽은 버튼) → 연결 후 재검증:
+    앱 클릭 → MCP 캘린더에 이벤트 생성 + 감사 2건 확인
+- 테스트: 백엔드 38 + MCP 34 = 72개
+
 ## 2026-07-27 (3) — 오케스트레이터: chat → 도구 호출 → 승인 루프
 
 - `app/services/orchestrator.py`: LLM function-calling(키 있을 때, 최대 3라운드) +

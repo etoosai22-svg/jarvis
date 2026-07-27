@@ -56,6 +56,8 @@ async def _pend_approval(
     )
     db.add(task)
     await db.flush()
+    # 실행되지 않았더라도 "승인을 요청했다"는 사실을 감사 로그에 남긴다 (docs/19 S9).
+    await mcp_gateway.record_decision(db, user_id, server, tool, arguments, "approval_required", approved=False)
     return task
 
 
@@ -192,7 +194,7 @@ async def _route_by_llm(
     user_id: str,
     session_id: str,
     llm_messages: list[dict[str, Any]],
-) -> OrchestrationResult:  # pragma: no cover - 외부 API 의존 (키 없는 테스트 환경에서는 규칙 라우터 사용)
+) -> OrchestrationResult:
     from openai import AsyncOpenAI
 
     out = OrchestrationResult()
@@ -250,7 +252,7 @@ async def orchestrate(
 ) -> OrchestrationResult:
     """도구 라우팅 진입점. reply=None이면 호출자가 일반 대화 경로를 탄다."""
     if settings.openai_api_key:
-        try:  # pragma: no cover - 외부 API 의존
+        try:
             return await _route_by_llm(db, settings, user_id, session_id, llm_messages)
         except Exception:
             logger.exception("LLM orchestration failed; falling back to rule router")

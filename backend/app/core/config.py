@@ -41,7 +41,11 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # populate_by_name: validation_alias가 걸린 필드(openai_api_key)를 필드명으로도
+    # 지정할 수 있게 한다. 없으면 Settings(openai_api_key=...)가 조용히 무시된다.
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore", populate_by_name=True
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

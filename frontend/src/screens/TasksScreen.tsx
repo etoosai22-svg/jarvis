@@ -20,6 +20,7 @@ export function TasksScreen() {
   const tasks = useAppStore((state) => state.tasks);
   const { loading, error, source } = useAppStore((state) => state.tasksLoad);
   const loadTasks = useAppStore((state) => state.loadTasks);
+  const setTaskState = useAppStore((state) => state.setTaskState);
 
   useEffect(() => {
     void loadTasks();
@@ -58,7 +59,14 @@ export function TasksScreen() {
       {visibleTasks.length === 0 && !loading ? (
         <Text style={styles.empty}>표시할 작업이 없습니다.</Text>
       ) : (
-        visibleTasks.map((task) => <TaskStatusCard key={task.id} task={task} />)
+        visibleTasks.map((task) => (
+          <TaskStatusCard
+            key={task.id}
+            task={task}
+            onApprove={() => void setTaskState(task.id, 'running')}
+            onCancel={() => void setTaskState(task.id, 'cancelled')}
+          />
+        ))
       )}
     </AppShell>
   );

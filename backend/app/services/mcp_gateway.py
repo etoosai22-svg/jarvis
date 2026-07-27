@@ -102,6 +102,23 @@ def _contains_timeout(exc: BaseException) -> bool:
     return False
 
 
+async def record_decision(
+    db: AsyncSession,
+    user_id: str,
+    server: str,
+    tool: str,
+    arguments: dict[str, Any],
+    status: str,
+    approved: bool = False,
+) -> None:
+    """게이트웨이를 통과하지 않는 승인 흐름(보류 생성·취소)을 같은 형식으로 감사한다.
+
+    §11은 도구 호출 기록을 요구하지만, 승인을 요청했다가 거절된 시도야말로
+    감사에서 가장 필요한 기록이므로 실행되지 않은 결정도 남긴다.
+    """
+    await _audit(db, user_id, server, tool, arguments, status, approved)
+
+
 async def _call_once(server_obj, tool: str, arguments: dict[str, Any], timeout: float):
     try:
         async with create_connected_server_and_client_session(server_obj) as session:

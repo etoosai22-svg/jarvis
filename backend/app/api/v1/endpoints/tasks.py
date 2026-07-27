@@ -109,6 +109,13 @@ async def update_task_status(
         await db.refresh(task)
         return task
 
+    # 승인 요청을 사용자가 거절한 사실도 감사 대상이다 (docs/19 S9).
+    if task.status == "waiting_for_approval" and status_value == "cancelled" and task.payload:
+        pending = json.loads(task.payload)
+        await mcp_gateway.record_decision(
+            db, user.id, pending["server"], pending["tool"], pending.get("arguments") or {}, "cancelled"
+        )
+
     task.status = status_value
     task.completed_at = utcnow() if status_value == "completed" else None
     await db.commit()
