@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "JARVIS",
+    "slug": "jarvis-mobile-frontend",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "jarvis",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": ["**/*"],
+    "ios": { "supportsTablet": true },
+    "android": { "adaptiveIcon": { "backgroundColor": "#070A12" } },
+    "web": { "bundler": "metro" }
+  }
+}
