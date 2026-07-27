@@ -55,16 +55,26 @@ Request:
 서버 처리 (순서 보장):
 1. `(user, session_id)`의 열린 conversation을 찾거나 생성
 2. 직전 대화 `CHAT_HISTORY_LIMIT`(기본 12)턴 + 관련 memory `CHAT_MEMORY_LIMIT`(기본 5)건 회수
-3. `prompts/system_prompt.md` 페르소나로 LLM 호출 (키 없거나 실패 시 규칙 기반 fallback 응답)
+3. **오케스트레이터**가 MCP 도구 필요 여부를 판단해 게이트웨이로 호출 (Part 12 규칙 적용)
+   - LLM 사용 가능 시: function-calling으로 도구 선택 (최대 3라운드)
+   - LLM 없을 때: 규칙 기반 라우터 (날씨/검색/메모/일정 등록)
+   - 승인 필수 도구(Part 12 §7)에 걸리면 실행하지 않고 `waiting_for_approval` 작업을 생성
 4. user/assistant 메시지 2행을 `messages`에 저장
-5. 작업 키워드(일정·회의·할 일·작업·예약·정리해·보내줘·찾아줘) 감지 시 `queued` 작업 생성
+5. 도구 의도가 없고 작업 키워드(일정·회의·할 일·작업·예약·정리해·보내줘·찾아줘)만 있으면 `queued` 작업 생성
 
 Response:
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `reply` | string | 어시스턴트 응답 |
-| `task_status` | string | 작업이 생성됐으면 `"queued"`, 아니면 `"completed"` |
-| `actions` | object[] | 생성 부수효과. 예: `{"type":"task.created","task_id":"<uuid>","status":"queued","source":"chat"}` |
+| `reply` | string | 어시스턴트 응답 (도구 결과가 반영됨) |
+| `task_status` | string | `"waiting_for_approval"` \| `"queued"` \| `"completed"` |
+| `actions` | object[] | 부수효과 목록. 타입별 스키마는 아래 |
+
+actions 항목 타입:
+| type | 필드 | 의미 |
+|---|---|---|
+| `task.created` | `task_id, status, source` | 일반 작업 생성 |
+| `tool.executed` | `server, tool, status, request_id` | MCP 도구가 실행됨 (status는 Part 12 §5) |
+| `approval.required` | `task_id, server, tool` | 승인 대기 작업 생성 — 앱은 승인 카드를 띄우고 아래 PATCH로 응답 |
 
 ### POST /api/v1/voice
 `multipart/form-data`, 필드명 `file` (필수, 빈 파일이면 400).
@@ -84,6 +94,7 @@ TaskRead:
 | `description` | string \| null |
 | `status` | `queued · planning · waiting_for_approval · running · completed · failed · cancelled` |
 | `priority` | int 1~5 |
+| `payload` | string(JSON) \| null — 승인 대기 중인 MCP 호출 `{server,tool,arguments}`. 오케스트레이터가 채운다 |
 | `created_at` / `completed_at` | timestamp / nullable timestamp |
 
 ### POST /api/v1/tasks → 201
@@ -91,8 +102,13 @@ Request: `{"title": <1~200자 필수>, "description"?: string, "priority"?: 1~5(
 `status`는 `queued`로 시작. `user_id` 지정 불가(§1).
 
 ### PATCH /api/v1/tasks/{task_id}?status_value=<status>
-상태 전이 전용. 위 7종 외 값이면 400, 남의/없는 작업이면 404.
+상태 전이. 위 7종 외 값이면 400, 남의/없는 작업이면 404.
 `completed`로 바꾸면 `completed_at` 기록, 다른 상태로 바꾸면 `completed_at=null`.
+
+**승인 실행 규칙:** `waiting_for_approval` + `payload` 있는 작업을 `running`으로 전이하면
+서버가 그 자리에서 payload의 MCP 호출을 `approved=True`로 실행하고, 결과에 따라
+`completed`/`failed`로 마무리해 반환한다 (요청은 도구 타임아웃만큼 걸릴 수 있다 — 최대 30초).
+`cancelled`로 전이하면 실행 없이 취소된다. 이것이 앱 승인 카드의 백엔드 계약이다.
 
 ### GET /api/v1/memory — 요청자 소유만
 Query: `category?`, `limit`, `offset`. 정렬: `updated_at` 내림차순.

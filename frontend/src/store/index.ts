@@ -81,8 +81,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         voiceState: 'idle',
       }));
 
-      // 백엔드가 작업을 생성했다고 알리면 목록을 다시 읽는다.
-      if (response.actions.some((action) => action.type === 'task.created')) {
+      // 작업 생성·승인 요청·도구 실행이 있었으면 작업 목록을 다시 읽는다.
+      const refreshTypes = ['task.created', 'approval.required', 'tool.executed'];
+      if (response.actions.some((action) => refreshTypes.includes(action.type as string))) {
         void get().loadTasks();
       }
     } catch (error) {

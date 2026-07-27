@@ -57,12 +57,15 @@
 - [◐] Weather — Open-Meteo 4종 (특보는 제공자 부재로 빈 목록)
 - [ ] Booking(2차)
 - [x] MCP Gateway — 봉투·승인 정책·타임아웃·재시도·감사 로그 (Part 12 §3·4·7·8·9·11)
-> 오케스트레이터(chat → 도구 선택 → invoke) 연결이 다음 작업.
+> 오케스트레이터 연결 완료 — chat이 도구를 선택·호출하고, 승인 필수 도구는
+> waiting_for_approval 작업(payload)으로 만들어 PATCH 승인 시 실행된다 (docs/09).
 
 ## Phase 6 - AI
 - [x] System Prompt (`prompts/system_prompt.md` — 서버가 실제 로드)
 - [◐] Memory Retrieval — 키워드 ILIKE. 벡터 검색으로 교체 예정
-- [ ] Planner  - [ ] Tool Selection  - [ ] Response Generator
+- [◐] Planner/Tool Selection — 오케스트레이터 구현 (LLM function-calling 최대 3라운드
+  + 키 없을 때 규칙 라우터: 날씨/검색/메모/일정). LLM 경로는 실키 검증 미실시
+- [◐] Response Generator — 도구 결과 기반 응답 합성 (규칙 경로), LLM 합성은 키 필요
 
 ## Phase 7 - Security
 - [◐] OAuth — 서버측 검증 완료(S1~S4), IdP·로그인 플로우 미착수

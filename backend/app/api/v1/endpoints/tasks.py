@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Annotated
 
@@ -10,6 +11,7 @@ from app.core.database import get_db
 from app.core.security import CurrentUserDep
 from app.core.time import utcnow
 from app.models.task import Task
+from app.services import mcp_gateway
 
 router = APIRouter()
 VALID_STATUSES = {"queued", "planning", "waiting_for_approval", "running", "completed", "failed", "cancelled"}
@@ -28,6 +30,7 @@ class TaskRead(BaseModel):
     description: str | None
     status: str
     priority: int
+    payload: str | None
     created_at: datetime
     completed_at: datetime | None
 
@@ -80,6 +83,32 @@ async def update_task_status(
     # 남의 작업은 존재 여부도 알려주지 않는다.
     if not task or task.user_id != user.id:
         raise HTTPException(status_code=404, detail="task not found")
+
+    # 승인 실행 규칙 (docs/09): 승인 대기 + payload 작업을 running으로 전이하면
+    # 보류된 MCP 호출을 approved=True로 즉시 실행하고 결과 상태로 마무리한다.
+    if task.status == "waiting_for_approval" and status_value == "running" and task.payload:
+        pending = json.loads(task.payload)
+        result = await mcp_gateway.invoke(
+            db=db,
+            user_id=user.id,
+            session_id=f"approval:{task.id}",
+            server=pending["server"],
+            tool=pending["tool"],
+            arguments=pending.get("arguments") or {},
+            approved=True,
+        )
+        if result.status == "success":
+            task.status = "completed"
+            task.completed_at = utcnow()
+            task.description = f"승인 후 실행 완료: {pending['server']}.{pending['tool']}"
+        else:
+            task.status = "failed"
+            task.completed_at = None
+            task.description = f"승인 후 실행 실패: {result.error or result.status}"
+        await db.commit()
+        await db.refresh(task)
+        return task
+
     task.status = status_value
     task.completed_at = utcnow() if status_value == "completed" else None
     await db.commit()

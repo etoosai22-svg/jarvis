@@ -16,6 +16,8 @@ export interface TaskDto {
   description: string | null;
   status: TaskStatusDto;
   priority: number;
+  /** 승인 대기 중인 MCP 호출 JSON — {server,tool,arguments} (docs/09) */
+  payload: string | null;
   created_at: string;
   completed_at: string | null;
 }

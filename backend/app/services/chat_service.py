@@ -129,6 +129,8 @@ async def handle_chat(
     session_id: str,
     user_message: str,
 ) -> ChatResult:
+    from app.services.orchestrator import orchestrate  # 순환 import 방지
+
     conversation = await get_or_create_conversation(db, user_id, session_id)
     history = await recent_messages(db, conversation.id, settings.chat_history_limit)
     memories = await relevant_memories(db, user_id, user_message, settings.chat_memory_limit)
@@ -138,6 +140,15 @@ async def handle_chat(
     llm_messages = build_llm_messages(
         load_system_prompt(settings.system_prompt_path), memories, history, user_message
     )
+
+    # 1) 오케스트레이터 — 도구 의도가 있으면 게이트웨이 호출까지 끝내고 응답을 만든다.
+    orchestration = await orchestrate(db, settings, user_id, session_id, user_message, llm_messages)
+    if orchestration.reply is not None:
+        db.add(Message(conversation_id=conversation.id, role="assistant", content=orchestration.reply))
+        await db.commit()
+        return ChatResult(reply=orchestration.reply, task_status=orchestration.task_status, actions=orchestration.actions)
+
+    # 2) 일반 대화 경로 — 도구 의도 없음.
     reply = await call_llm(settings, llm_messages) or fallback_reply(user_message)
 
     actions: list[dict[str, Any]] = []

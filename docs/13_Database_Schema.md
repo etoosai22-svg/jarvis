@@ -55,6 +55,7 @@
 | description | Text | nullable |
 | status | String(40) | default `queued`, index — 7종 상태는 Part 9 §2 |
 | priority | Integer | default 3 (1~5, API 계층에서 검증) |
+| payload | Text | nullable — 승인 대기 MCP 호출 JSON `{server,tool,arguments}` (Part 9 승인 실행 규칙) |
 | created_at / updated_at | DateTime | not null, default utcnow (updated_at은 onupdate) |
 | completed_at | DateTime | nullable — `completed` 상태일 때만 값 존재 |
 

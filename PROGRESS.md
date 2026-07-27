@@ -1,5 +1,16 @@
 # JARVIS Progress
 
+## 2026-07-27 (3) — 오케스트레이터: chat → 도구 호출 → 승인 루프
+
+- `app/services/orchestrator.py`: LLM function-calling(키 있을 때, 최대 3라운드) +
+  규칙 라우터(키 없을 때: 날씨/검색/메모/일정 등록, '내일 10시' 시각 파서 포함)
+- 승인 루프 완성: 승인 필수 도구 → `waiting_for_approval` 작업(payload에 보류 호출 저장)
+  → 앱 승인 카드 → `PATCH running` 시 approved=True로 실행 → completed/failed
+  → 취소 시 실행 안 됨 (E2E 테스트로 캘린더 실제 생성/미생성 확인)
+- 계약 선행 수정: docs/09 actions 타입 표·승인 실행 규칙, docs/13 tasks.payload
+  (+Alembic `b99dad96a5f1`)
+- 테스트 32개(오케스트레이터 9 신규) + MCP 34 = 66개, tsc 무오류
+
 ## 2026-07-27 (2) — Phase 5: MCP 서버 5종 + 게이트웨이
 
 - 진행 방식: 공통 규약(`mcp/src/jarvis_mcp/__init__.py`) + 본보기(weather) 고정 후
