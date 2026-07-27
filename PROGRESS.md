@@ -1,5 +1,48 @@
 # JARVIS Progress
 
+## 2026-07-27 — 저장소 정리 + 앱/백엔드 연결
+
+### 1. 버전 관리
+- `/Users/etoos/JARVIS`를 git 저장소로 초기화 (그 전까지 백업 없이 로컬에만 존재)
+- `.gitignore`: `.venv`, `node_modules`, `*.db`, `.env`, `.expo` 제외
+
+### 2. 프론트엔드 ↔ 백엔드 연결
+- `src/config/env.ts`: `EXPO_PUBLIC_API_BASE_URL` 기반 API/WS 주소
+- `src/types/api.ts`: 백엔드 DTO 및 `WS /api/v1/ws/voice` 이벤트 타입
+- `src/services/api.ts`: 타임아웃·Bearer 토큰 훅·음성 WebSocket을 갖춘 API 클라이언트
+- `src/services/mappers.ts`: DTO ↔ 화면 모델 변환 (작업 상태 7종 → 6종)
+- `src/store/index.ts`: zustand 스토어 (대화/작업/메모리 + 목업 폴백)
+- Tasks/Memory/Conversation 화면을 실데이터로 전환, 백엔드 미가동 시 배너 노출
+- `npx tsc --noEmit` 통과
+
+### 3. 백엔드 보안·대화 영속화
+- `app/core/security.py`: JWKS 기반 JWT 검증 + `AUTH_REQUIRED=false` 로컬 우회
+- 작업/메모리 조회를 인증 주체로 스코프 (요청 본문의 `user_id` 무시)
+- `app/services/chat_service.py`: conversation/message 영속화, 메모리 회수,
+  `prompts/system_prompt.md` 기반 시스템 프롬프트, 작업 자동 생성
+- `datetime.utcnow()` → `app/core/time.py:utcnow()` (deprecation 경고 제거)
+- 메모리 태그 구분자를 쉼표 → `\x1f` (태그 안 쉼표 보존, 기존 데이터 호환)
+
+### 4. 마이그레이션 / 실행 환경
+- Alembic 초기화 + `create mvp tables` 리비전, upgrade/downgrade 왕복 검증
+- `AUTO_CREATE_TABLES` 설정 추가 (SQLite 로컬 편의용, Postgres에서는 Alembic)
+- Dockerfile 빌드 컨텍스트를 저장소 루트로 변경 (`prompts/` 포함), 기동 시 `alembic upgrade head`
+- docker-compose에 postgres healthcheck 추가
+
+### 검증 결과
+- `uv run --extra test python -m pytest -q` → **16 passed**
+- `npx tsc --noEmit` → 오류 없음
+- 실제 서버 기동 후 chat 2회 → messages 4행 + conversation 1행 재사용 확인,
+  chat이 만든 작업이 `/api/v1/tasks`에 노출되는 것까지 확인
+
+### 남은 작업
+- `.github/workflows` CI 비어 있음 (lint/test 자동화 미구성)
+- `mcp/{search,calendar,notes,files,weather}` 전부 빈 디렉터리 — Phase 5 미착수
+- Redis(세션/캐시/rate limit) 미사용, 음성 WebSocket은 아직 하드코딩 응답
+- 벡터 검색 없음 — 메모리 회수는 키워드 ilike 기반
+
+---
+
 ## 2026-07-26 15:42 KST — FastAPI Backend MVP 구현 완료
 
 - 작업 디렉터리: `/Users/etoos/JARVIS/backend`

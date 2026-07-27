@@ -1,11 +1,14 @@
 from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import CurrentUserDep
+from app.core.time import utcnow
 from app.models.task import Task
 
 router = APIRouter()
@@ -15,7 +18,6 @@ VALID_STATUSES = {"queued", "planning", "waiting_for_approval", "running", "comp
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: str | None = None
-    user_id: str | None = None
     priority: int = Field(default=3, ge=1, le=5)
 
 
@@ -34,18 +36,31 @@ class TaskRead(BaseModel):
 
 @router.get("", response_model=list[TaskRead])
 @router.get("/", response_model=list[TaskRead], include_in_schema=False)
-async def list_tasks(user_id: str | None = None, db: AsyncSession = Depends(get_db)) -> list[Task]:
-    stmt = select(Task).order_by(Task.created_at.desc())
-    if user_id:
-        stmt = stmt.where(Task.user_id == user_id)
+async def list_tasks(
+    user: CurrentUserDep,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[Task]:
+    stmt = (
+        select(Task)
+        .where(Task.user_id == user.id)
+        .order_by(Task.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
 @router.post("", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=TaskRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
-async def create_task(payload: TaskCreate, db: AsyncSession = Depends(get_db)) -> Task:
-    task = Task(**payload.model_dump())
+async def create_task(
+    payload: TaskCreate,
+    user: CurrentUserDep,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Task:
+    task = Task(**payload.model_dump(), user_id=user.id)
     db.add(task)
     await db.commit()
     await db.refresh(task)
@@ -53,15 +68,20 @@ async def create_task(payload: TaskCreate, db: AsyncSession = Depends(get_db)) -
 
 
 @router.patch("/{task_id}", response_model=TaskRead)
-async def update_task_status(task_id: str, status_value: str, db: AsyncSession = Depends(get_db)) -> Task:
+async def update_task_status(
+    task_id: str,
+    status_value: str,
+    user: CurrentUserDep,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Task:
     if status_value not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail="invalid task status")
     task = await db.get(Task, task_id)
-    if not task:
+    # 남의 작업은 존재 여부도 알려주지 않는다.
+    if not task or task.user_id != user.id:
         raise HTTPException(status_code=404, detail="task not found")
     task.status = status_value
-    if status_value == "completed":
-        task.completed_at = datetime.utcnow()
+    task.completed_at = utcnow() if status_value == "completed" else None
     await db.commit()
     await db.refresh(task)
     return task
