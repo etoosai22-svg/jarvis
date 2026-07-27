@@ -14,6 +14,7 @@ import type { VoiceState } from '@/types/models';
 
 const STATE_COPY: Record<VoiceState, { title: string; sub: string }> = {
   idle: { title: '무엇을 도와드릴까요?', sub: '텍스트로 입력하거나 마이크를 눌러 말씀하세요' },
+  preparing: { title: '마이크를 여는 중입니다', sub: '브라우저가 권한을 물으면 허용해 주세요' },
   listening: { title: '듣고 있습니다', sub: '말씀이 끝나면 자동으로 인식합니다' },
   transcribing: { title: '음성을 인식하고 있습니다', sub: '잠시만 기다려 주세요' },
   thinking: { title: '요청을 정리하고 있습니다', sub: '응답을 준비하는 중입니다' },
@@ -49,7 +50,10 @@ export function ConversationScreen() {
         <StatusPill label={voiceState} tone={voiceState === 'error' ? 'error' : 'info'} />
       </GradientCard>
       {permissionDenied ? (
-        <ConnectionNotice message="마이크 권한이 필요합니다. 설정에서 허용한 뒤 다시 시도해 주세요." />
+        <ConnectionNotice
+          title="마이크를 쓸 수 없습니다"
+          message="브라우저 주소창의 자물쇠 아이콘에서 마이크를 허용한 뒤 다시 눌러 주세요."
+        />
       ) : chat.error ? (
         <ConnectionNotice message={chat.error} />
       ) : null}

@@ -7,6 +7,7 @@ import type { VoiceState } from '@/types/models';
 
 const labels: Record<VoiceState, string> = {
   idle: '자비스 또는 탭',
+  preparing: '마이크를 여는 중이에요',
   listening: '듣고 있어요',
   transcribing: '음성을 이해하고 있어요',
   thinking: '답변을 정리 중입니다',
@@ -26,7 +27,7 @@ export function VoiceOrb({ state = 'idle', compact = false, onPress }: { state?:
   }, [state, pulse]);
 
   const scale = pulse.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.98, state === 'listening' ? 1.08 : 1.04, 0.98] });
-  const Icon = state === 'speaking' ? Volume2 : state === 'error' ? AlertTriangle : state === 'thinking' || state === 'transcribing' ? Loader : state === 'executing' ? Search : state === 'idle' ? Mic : CheckCircle2;
+  const Icon = state === 'speaking' ? Volume2 : state === 'error' ? AlertTriangle : state === 'thinking' || state === 'transcribing' || state === 'preparing' ? Loader : state === 'executing' ? Search : state === 'idle' ? Mic : CheckCircle2;
   const dim = compact ? size.orbCompact : size.orb;
   return (
     <View style={[styles.wrapper, compact && styles.compactWrapper]}>

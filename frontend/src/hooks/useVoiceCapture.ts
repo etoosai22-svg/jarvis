@@ -30,6 +30,8 @@ export function useVoiceCapture() {
   const start = useCallback(async () => {
     if (busy.current) return;
     busy.current = true;
+    // 권한 요청은 몇 초가 걸린다 — 그동안 화면이 그대로면 고장난 것처럼 보인다.
+    setVoiceState('preparing');
     try {
       if (!(await ensureMicrophonePermission())) {
         setPermissionDenied(true);
@@ -73,7 +75,7 @@ export function useVoiceCapture() {
     } else if (voiceState === 'idle' || voiceState === 'error') {
       await start();
     }
-    // transcribing/thinking/executing/speaking 중에는 무시 — 처리 중이다.
+    // preparing/transcribing/thinking/executing/speaking 중에는 무시 — 처리 중이다.
   }, [start, stopAndSend, voiceState]);
 
   return { toggle, isRecording: voiceState === 'listening', permissionDenied };

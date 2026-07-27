@@ -1,4 +1,4 @@
-export type VoiceState = 'idle' | 'listening' | 'transcribing' | 'thinking' | 'executing' | 'speaking' | 'error';
+export type VoiceState = 'idle' | 'preparing' | 'listening' | 'transcribing' | 'thinking' | 'executing' | 'speaking' | 'error';
 export type TaskState = 'queued' | 'running' | 'approval_required' | 'completed' | 'failed' | 'cancelled';
 export type MemoryCategory = '선호' | '사람·관계' | '프로젝트' | '반복 일정' | '서비스';
 

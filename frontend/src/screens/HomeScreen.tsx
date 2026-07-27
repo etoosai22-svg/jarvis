@@ -24,7 +24,10 @@ export function HomeScreen() {
       <VoiceOrb state={voiceState} onPress={() => void toggle()} />
       <VoiceStateBanner state={voiceState} />
       {permissionDenied ? (
-        <ConnectionNotice message="마이크 권한이 필요합니다. 설정에서 허용한 뒤 다시 시도해 주세요." />
+        <ConnectionNotice
+          title="마이크를 쓸 수 없습니다"
+          message="브라우저 주소창의 자물쇠 아이콘에서 마이크를 허용한 뒤 다시 눌러 주세요."
+        />
       ) : chatError ? (
         <ConnectionNotice message={chatError} />
       ) : null}
