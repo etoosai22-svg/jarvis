@@ -9,7 +9,7 @@
 |---|---|---|
 | Backend API | `backend/tests/` — 16 tests | ✅ 통과 (`uv run --extra test python -m pytest -q`) |
 | Frontend 타입 | `frontend/` | ✅ `npx tsc --noEmit` 무오류 |
-| CI | `.github/workflows/` | ❌ 비어 있음 — push 시 자동 실행 없음 |
+| CI | `.github/workflows/ci.yml` | ✅ main push/PR 시 backend·frontend 잡 자동 실행 |
 | E2E / 음성 / 성능 | — | ❌ 미작성 |
 
 테스트 DB는 임시 파일 SQLite(`tests/conftest.py`)를 쓴다 — 개발용 `jarvis.db`를 오염시키지 않는다.
@@ -40,13 +40,18 @@
 ### 마이그레이션
 - [x] `alembic upgrade head` → 7개 테이블 생성, `downgrade base` 왕복 무오류 (수동 검증 — CI 편입 대상)
 
-## 2. 자동화 (다음 단계 — 착수 조건 없음)
+## 2. 자동화 — 구현됨 (`.github/workflows/ci.yml`)
 
-`.github/workflows/ci.yml`에 최소 2개 잡:
-1. **backend**: `uv sync --extra test` → `pytest -q` → `alembic upgrade head`(빈 SQLite 대상)
+main에 대한 push/PR에서 두 잡이 병렬 실행된다:
+1. **backend**: `uv sync --extra test` → `pytest -q` → `alembic upgrade head` + `downgrade base` 왕복
 2. **frontend**: `npm ci` → `npx tsc --noEmit`
 
-병합 조건: 두 잡 모두 green. 커버리지 수치 목표(90%)는 CI가 생긴 뒤에 측정치로 관리한다.
+병합 조건: 두 잡 모두 green.
+
+남은 항목:
+- [ ] GitHub 저장소 설정에서 main 브랜치 보호 규칙에 두 잡을 required check으로 등록
+- [ ] Lint (ruff / biome) 잡 추가
+- [ ] 커버리지 측정 — 목표 수치(90%)는 측정이 시작된 뒤에 관리한다
 
 ## 3. Phase별 추가 예정
 - **Phase 3 (메모리)**: 벡터 검색 정확도 스냅숏, memory 회수 상위 k 검증

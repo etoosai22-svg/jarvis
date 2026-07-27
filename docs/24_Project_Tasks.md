@@ -16,8 +16,9 @@
 - [x] 환경변수 관리 (.env.example, EXPO_PUBLIC_*)
 
 ### CI/CD
-- [ ] GitHub Actions  - [ ] Lint  - [ ] Unit Test 자동 실행  - [ ] Build 자동화
-> **다음 우선순위.** 기준은 Part 18 §2.
+- [x] GitHub Actions (`.github/workflows/ci.yml` — backend·frontend 잡)
+- [ ] Lint (ruff/biome 잡 미추가)  - [x] Unit Test 자동 실행  - [ ] Build 자동화
+> 브랜치 보호 규칙 등록은 미완. 기준은 Part 18 §2.
 
 ## Phase 2 - Backend
 ### API
