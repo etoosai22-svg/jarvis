@@ -1,5 +1,14 @@
 # JARVIS Progress
 
+## 2026-07-27 (2) — Phase 5: MCP 서버 5종 + 게이트웨이
+
+- 진행 방식: 공통 규약(`mcp/src/jarvis_mcp/__init__.py`) + 본보기(weather) 고정 후
+  search/calendar/notes/files 4종을 병렬 에이전트로 구현 — 공유 파일 충돌 0건
+- 게이트웨이(`backend/app/services/mcp_gateway.py`): Part 12 §4 봉투, §7 승인 정책
+  (calendar 변이 도구는 approved=True 필수), §8 재시도, §9 타임아웃, §11 감사 로그
+- 검증: MCP 34 + 게이트웨이 7 + 기존 16 = 테스트 57개, CI 3잡(backend/mcp/frontend) green
+- 다음: 오케스트레이터 — chat이 도구를 선택·호출하고 승인 플로우를 앱 WS로 노출
+
 ## 2026-07-27 — 저장소 정리 + 앱/백엔드 연결
 
 ### 1. 버전 관리
